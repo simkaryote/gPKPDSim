@@ -41,7 +41,7 @@ if isempty(sbioselect(sbioroot, 'Name', newUnitName))
 end
 
 newUnitName =  'nM' ;
-newUnitComposition = '10^-9*(mole / litre)' ;
+newUnitComposition = 'nanomole / litre';
  
 % if new unit name does not exist
 if isempty(sbioselect(sbioroot, 'Name', newUnitName))
