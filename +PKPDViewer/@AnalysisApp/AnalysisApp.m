@@ -28,8 +28,8 @@ classdef (Sealed) AnalysisApp < matlab.mixin.SetGet & UIUtilities.ConstructorAcc
         % Info for About dialog
         %RAJ - move into about?
         Name = 'gPKPDSim'
-        Revision = '1.1';
-        RevisionDate = datenum('07/01/2017');
+        Revision = '1.1.2';
+        RevisionDate = datenum('09/17/2021');
         Logo = which('MW_CSG_Logo.png');
         SupportInfo = '';
     end
@@ -1219,8 +1219,7 @@ classdef (Sealed) AnalysisApp < matlab.mixin.SetGet & UIUtilities.ConstructorAcc
         function onAbout(app)
             
             % Open the about dialog
-            UIUtilities.AboutDialog(app.Name,app.Revision,...
-                app.RevisionDate,app.Logo,app.SupportInfo);
+            UIUtilities.AboutDialog(app.Name,app.Revision, app.RevisionDate,app.Logo,app.SupportInfo);
             
         end %function
         
