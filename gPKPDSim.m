@@ -14,9 +14,10 @@ end
 
 % If version is < R2015a, error out
 if verLessThan('matlab','9.0')
-    error('The app was tested in MATLAB R2015b, R2016a, and R2016b. An older version of MATLAB was detected. Please use one of the supported releases.');
-elseif ~verLessThan('matlab','9.2')
-    warning('The app was tested in MATLAB R2015b, R2016a, and R2016b. The app was not tested in the detected release and may not run as expected.');
+    error('The app was tested in MATLAB R2015b or newer. An older version of MATLAB was detected. Please use one of the supported releases.');
+    % If version is newer than 21a warn.
+elseif ~verLessThan('matlab','9.11')
+    warning('The app was tested in MATLAB R2015b thru R2021a. The app was not tested in the detected release and may not run as expected.');
 end
 
 % Run units.m

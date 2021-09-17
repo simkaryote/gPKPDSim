@@ -1,0 +1,126 @@
+<deployment-project plugin="plugin.toolbox" plugin-version="1.0">
+  <configuration build-checksum="2240911078" file="/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim/gPKPDSimMLTBX.prj" location="/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim" name="gPKPDSimMLTBX" target="target.toolbox" target-name="Package Toolbox">
+    <param.appname>gPKPDSim</param.appname>
+    <param.authnamewatermark>Iraj Hosseini</param.authnamewatermark>
+    <param.email />
+    <param.company />
+    <param.summary />
+    <param.description />
+    <param.screenshot />
+    <param.version>1.1.2</param.version>
+    <param.output>${PROJECT_ROOT}/gPKPDSim.mltbx</param.output>
+    <param.products.name />
+    <param.products.id />
+    <param.products.version />
+    <param.platforms />
+    <param.guid>1deea1e0-f409-4024-8b7d-8d047f64aa72</param.guid>
+    <param.exclude.filters>% List files contained in your toolbox folder that you would like to exclude
+% from packaging.  Excludes should be listed relative to the toolbox folder.
+% Some examples of how to specify excludes are provided below:
+%
+% A single file in the toolbox folder:
+% .svn
+%
+% A single file in a subfolder of the toolbox folder:
+% example/.svn
+%
+% All files in a subfolder of the toolbox folder:
+% example/*
+%
+% All files of a certain name in all subfolders of the toolbox folder:
+% **/.svn
+%
+% All files matching a pattern in all subfolders of the toolbox folder:
+% **/*.bak
+%
++PKPD
++UIUtilities
++PKPDViewer
+.git
+utilities
+.gitignore
+gPKPDSim.m</param.exclude.filters>
+    <param.examples />
+    <param.demosxml />
+    <param.apps>
+      <file>${PROJECT_ROOT}/gPKPDSim.mlappinstall</file>
+    </param.apps>
+    <param.docs />
+    <param.matlabpath.excludes />
+    <unset>
+      <param.email />
+      <param.company />
+      <param.summary />
+      <param.description />
+      <param.screenshot />
+      <param.output />
+      <param.products.name />
+      <param.products.id />
+      <param.products.version />
+      <param.platforms />
+      <param.examples />
+      <param.demosxml />
+      <param.docs />
+      <param.matlabpath.excludes />
+    </unset>
+    <fileset.rootdir>
+      <file>/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim</file>
+    </fileset.rootdir>
+    <fileset.rootfiles>
+      <file>${PROJECT_ROOT}/Supp Info - 2nd Submission</file>
+      <file>${PROJECT_ROOT}/gPKPDSim.mlappinstall</file>
+      <file>${PROJECT_ROOT}/license.txt</file>
+    </fileset.rootfiles>
+    <fileset.depfun.included />
+    <fileset.depfun.excluded />
+    <fileset.package />
+    <build-deliverables>
+      <file location="/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim" name="gPKPDSim.mltbx" optional="false">/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim/gPKPDSim.mltbx</file>
+    </build-deliverables>
+    <workflow />
+    <matlab>
+      <root>/System/Volumes/Data/mathworks/devel/jobarchive/BR2016ad/.zfs/snapshot/BR2016ad.499804.pass.ja1/current/build/matlab</root>
+      <toolboxes>
+        <toolbox name="fixedpoint" />
+        <toolbox name="matlabcoder" />
+        <toolbox name="matlabhdlcoder" />
+        <toolbox name="embeddedcoder" />
+      </toolboxes>
+      <toolbox>
+        <fixedpoint>
+          <enabled>true</enabled>
+        </fixedpoint>
+      </toolbox>
+      <toolbox>
+        <matlabcoder>
+          <enabled>true</enabled>
+        </matlabcoder>
+      </toolbox>
+      <toolbox>
+        <matlabhdlcoder>
+          <enabled>true</enabled>
+        </matlabhdlcoder>
+      </toolbox>
+      <toolbox>
+        <embeddedcoder>
+          <enabled>true</enabled>
+        </embeddedcoder>
+      </toolbox>
+    </matlab>
+    <platform>
+      <unix>true</unix>
+      <mac>true</mac>
+      <windows>false</windows>
+      <win2k>false</win2k>
+      <winxp>false</winxp>
+      <vista>false</vista>
+      <linux>false</linux>
+      <solaris>false</solaris>
+      <osver>10.16</osver>
+      <os32>false</os32>
+      <os64>true</os64>
+      <arch>maci64</arch>
+      <matlab>true</matlab>
+    </platform>
+  </configuration>
+</deployment-project>
