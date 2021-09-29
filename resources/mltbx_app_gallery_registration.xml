@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<toolset id="user_apps_toolset" template="false">
+   <tool app_file_path="gPKPDSim.m" handler_class="com.mathworks.deployment.desktop.toolstrip.ToolboxToolSetExtensionHandler" id="1deea1e0-f409-4024-8b7d-8d047f64aa72:gPKPDSim.m" label="gPKPDSim" quick_access_eligible="false" toolset_id="user_apps_toolset">
+      <callback>gPKPDSim</callback>
+      <icon filename="matlab_app_generic_icon_24"/>
+      <icon filename="matlab_app_generic_icon_16"/>
+      <parent_tool id="my_apps" toolset_id="apps_toolset"/>
+   </tool>
+</toolset>

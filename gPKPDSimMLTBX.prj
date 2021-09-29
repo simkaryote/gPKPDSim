@@ -1,19 +1,31 @@
 <deployment-project plugin="plugin.toolbox" plugin-version="1.0">
-  <configuration build-checksum="2240911078" file="/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim/gPKPDSimMLTBX.prj" location="/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim" name="gPKPDSimMLTBX" target="target.toolbox" target-name="Package Toolbox">
+  <configuration build-checksum="496733448" file="/Users/pax/projects/v1.1.1gPKPDSim/gPKPDSim/gPKPDSimMLTBX.prj" location="/Users/pax/projects/v1.1.1gPKPDSim/gPKPDSim" name="gPKPDSimMLTBX" target="target.toolbox" target-name="Package Toolbox">
     <param.appname>gPKPDSim</param.appname>
     <param.authnamewatermark>Iraj Hosseini</param.authnamewatermark>
     <param.email />
     <param.company />
     <param.summary />
     <param.description />
-    <param.screenshot />
-    <param.version>1.1.2</param.version>
+    <param.screenshot>${PROJECT_ROOT}/utilities/Icons/logo.png</param.screenshot>
+    <param.version>1.1.3</param.version>
     <param.output>${PROJECT_ROOT}/gPKPDSim.mltbx</param.output>
-    <param.products.name />
-    <param.products.id />
-    <param.products.version />
+    <param.products.name>
+      <item>MATLAB</item>
+      <item>SimBiology</item>
+      <item>Statistics and Machine Learning Toolbox</item>
+    </param.products.name>
+    <param.products.id>
+      <item>1</item>
+      <item>103</item>
+      <item>19</item>
+    </param.products.id>
+    <param.products.version>
+      <item>9.10</item>
+      <item>6.1</item>
+      <item>12.1</item>
+    </param.products.version>
     <param.platforms />
-    <param.guid>1deea1e0-f409-4024-8b7d-8d047f64aa72</param.guid>
+    <param.guid>39d81c5b-e5cb-4e27-89c0-b9baaae8c722</param.guid>
     <param.exclude.filters>% List files contained in your toolbox folder that you would like to exclude
 % from packaging.  Excludes should be listed relative to the toolbox folder.
 % Some examples of how to specify excludes are provided below:
@@ -33,78 +45,206 @@
 % All files matching a pattern in all subfolders of the toolbox folder:
 % **/*.bak
 %
-+PKPD
-+UIUtilities
-+PKPDViewer
 .git
-utilities
+.DS_Store
 .gitignore
-gPKPDSim.m</param.exclude.filters>
+*.asv</param.exclude.filters>
+    <param.exclude.pcodedmfiles>true</param.exclude.pcodedmfiles>
     <param.examples />
     <param.demosxml />
     <param.apps>
-      <file>${PROJECT_ROOT}/gPKPDSim.mlappinstall</file>
+      <file>${PROJECT_ROOT}/gPKPDSimApp.mlappinstall</file>
     </param.apps>
+    <param.registered.apps />
     <param.docs />
-    <param.matlabpath.excludes />
+    <param.getting.started.guide />
+    <param.matlabpath.excludes>
+      <item>/.git/refs/tags</item>
+      <item>/.git/objects/d3</item>
+      <item>/.git/objects/d8</item>
+      <item>/.git/objects/df</item>
+      <item>/.git/objects/e0</item>
+      <item>/.git/objects/e3</item>
+      <item>/.git/objects/ea</item>
+      <item>/.git/objects/eb</item>
+      <item>/.git/objects/f9</item>
+      <item>/.git/objects/info</item>
+      <item>/.git/objects/pack</item>
+      <item>/.git/refs</item>
+      <item>/.git/refs/heads</item>
+      <item>/.git/refs/remotes</item>
+      <item>/.git/refs/remotes/origin</item>
+      <item>/.git/objects/91</item>
+      <item>/.git/objects/99</item>
+      <item>/.git/objects/9b</item>
+      <item>/.git/objects/9f</item>
+      <item>/.git/objects/a3</item>
+      <item>/.git/objects/a4</item>
+      <item>/.git/objects/a6</item>
+      <item>/.git/objects/a9</item>
+      <item>/.git/objects/ad</item>
+      <item>/.git/objects/af</item>
+      <item>/.git/objects/b3</item>
+      <item>/.git/objects/b4</item>
+      <item>/.git/objects/b5</item>
+      <item>/.git/objects/b9</item>
+      <item>/.git/objects/ba</item>
+      <item>/.git/objects/bb</item>
+      <item>/.git/objects/bd</item>
+      <item>/.git/objects/c3</item>
+      <item>/.git/objects/c8</item>
+      <item>/.git/objects/d1</item>
+      <item>/.git/objects/41</item>
+      <item>/.git/objects/44</item>
+      <item>/.git/objects/46</item>
+      <item>/.git/objects/4c</item>
+      <item>/.git/objects/51</item>
+      <item>/.git/objects/56</item>
+      <item>/.git/objects/5a</item>
+      <item>/.git/objects/5b</item>
+      <item>/.git/objects/5c</item>
+      <item>/.git/objects/63</item>
+      <item>/.git/objects/69</item>
+      <item>/.git/objects/6b</item>
+      <item>/.git/objects/6d</item>
+      <item>/.git/objects/6e</item>
+      <item>/.git/objects/71</item>
+      <item>/.git/objects/73</item>
+      <item>/.git/objects/75</item>
+      <item>/.git/objects/76</item>
+      <item>/.git/objects/77</item>
+      <item>/.git/objects/7b</item>
+      <item>/.git/objects/7d</item>
+      <item>/.git/objects/7e</item>
+      <item>/.git/objects/7f</item>
+      <item>/.git/objects/80</item>
+      <item>/.git/objects/81</item>
+      <item>/.git/objects/82</item>
+      <item>/.git/objects/83</item>
+      <item>/.git/logs/refs</item>
+      <item>/.git/logs/refs/heads</item>
+      <item>/.git/logs/refs/remotes</item>
+      <item>/.git/logs/refs/remotes/origin</item>
+      <item>/.git/objects</item>
+      <item>/.git/objects/03</item>
+      <item>/.git/objects/04</item>
+      <item>/.git/objects/05</item>
+      <item>/.git/objects/07</item>
+      <item>/.git/objects/08</item>
+      <item>/.git/objects/0c</item>
+      <item>/.git/objects/0d</item>
+      <item>/.git/objects/10</item>
+      <item>/.git/objects/15</item>
+      <item>/.git/objects/16</item>
+      <item>/.git/objects/18</item>
+      <item>/.git/objects/1a</item>
+      <item>/.git/objects/21</item>
+      <item>/.git/objects/22</item>
+      <item>/.git/objects/25</item>
+      <item>/.git/objects/29</item>
+      <item>/.git/objects/2d</item>
+      <item>/.git/objects/2e</item>
+      <item>/.git/objects/34</item>
+      <item>/.git/objects/3b</item>
+      <item>/.git/objects/3c</item>
+      <item>/.git/objects/40</item>
+      <item>/.git</item>
+      <item>/.git/hooks</item>
+      <item>/.git/info</item>
+      <item>/.git/logs</item>
+    </param.matlabpath.excludes>
+    <param.javaclasspath.excludes>
+      <item>/utilities/20130227_xlwrite/20130227_xlwrite/poi_library/poi-ooxml-3.8-20120326.jar</item>
+      <item>/utilities/20130227_xlwrite/20130227_xlwrite/poi_library/xmlbeans-2.3.0.jar</item>
+      <item>/utilities/20130227_xlwrite/20130227_xlwrite/poi_library/poi-3.8-20120326.jar</item>
+      <item>/utilities/20130227_xlwrite/20130227_xlwrite/poi_library/poi-ooxml-schemas-3.8-20120326.jar</item>
+      <item>/utilities/20130227_xlwrite/20130227_xlwrite/poi_library/dom4j-1.6.1.jar</item>
+      <item>/utilities/20130227_xlwrite/20130227_xlwrite/poi_library/stax-api-1.0.1.jar</item>
+      <item>/utilities/JavaTableWrapper/+uiextras/+jTable/UIExtrasTable.jar</item>
+    </param.javaclasspath.excludes>
+    <param.exported.on.package>false</param.exported.on.package>
+    <param.required.addons>
+      <requiredaddons>
+        <requiredAddOn earliest="earliest" fromRepository="true" id="e5af5a78-4a80-11e4-9553-005056977bd0" include="true" latest="latest">GUI Layout Toolbox</requiredAddOn>
+      </requiredaddons>
+    </param.required.addons>
+    <param.matlab.project.id />
+    <param.matlab.project.name />
+    <param.release.start>R2015b</param.release.start>
+    <param.release.end>latest</param.release.end>
+    <param.release.current.only>false</param.release.current.only>
+    <param.compatiblity.windows>true</param.compatiblity.windows>
+    <param.compatiblity.macos>true</param.compatiblity.macos>
+    <param.compatiblity.linux>true</param.compatiblity.linux>
+    <param.compatiblity.matlabonline>false</param.compatiblity.matlabonline>
+    <param.installation.map />
+    <param.additional.sw.names />
+    <param.additional.sw.licenses />
+    <param.additional.sw.win.url />
+    <param.additional.sw.mac.url />
+    <param.additional.sw.linux.url />
     <unset>
       <param.email />
       <param.company />
       <param.summary />
       <param.description />
-      <param.screenshot />
       <param.output />
-      <param.products.name />
-      <param.products.id />
-      <param.products.version />
       <param.platforms />
+      <param.exclude.pcodedmfiles />
       <param.examples />
       <param.demosxml />
+      <param.registered.apps />
       <param.docs />
-      <param.matlabpath.excludes />
+      <param.getting.started.guide />
+      <param.exported.on.package />
+      <param.matlab.project.id />
+      <param.matlab.project.name />
+      <param.release.current.only />
+      <param.compatiblity.windows />
+      <param.compatiblity.macos />
+      <param.compatiblity.linux />
+      <param.installation.map />
+      <param.additional.sw.names />
+      <param.additional.sw.licenses />
+      <param.additional.sw.win.url />
+      <param.additional.sw.mac.url />
+      <param.additional.sw.linux.url />
     </unset>
     <fileset.rootdir>
-      <file>/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim</file>
+      <file>${PROJECT_ROOT}</file>
     </fileset.rootdir>
     <fileset.rootfiles>
+      <file>${PROJECT_ROOT}/+PKPD</file>
+      <file>${PROJECT_ROOT}/+PKPDViewer</file>
+      <file>${PROJECT_ROOT}/+UIUtilities</file>
       <file>${PROJECT_ROOT}/Supp Info - 2nd Submission</file>
-      <file>${PROJECT_ROOT}/gPKPDSim.mlappinstall</file>
+      <file>${PROJECT_ROOT}/gPKPDSim.m</file>
       <file>${PROJECT_ROOT}/license.txt</file>
+      <file>${PROJECT_ROOT}/resources</file>
+      <file>${PROJECT_ROOT}/utilities</file>
     </fileset.rootfiles>
     <fileset.depfun.included />
     <fileset.depfun.excluded />
     <fileset.package />
     <build-deliverables>
-      <file location="/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim" name="gPKPDSim.mltbx" optional="false">/Users/pax/work/v1.1.1_gPKPDSim/gPKPDSim/gPKPDSim.mltbx</file>
+      <file location="${PROJECT_ROOT}" name="gPKPDSim.mltbx" optional="false">/Users/pax/projects/v1.1.1gPKPDSim/gPKPDSim/gPKPDSim.mltbx</file>
     </build-deliverables>
     <workflow />
     <matlab>
-      <root>/System/Volumes/Data/mathworks/devel/jobarchive/BR2016ad/.zfs/snapshot/BR2016ad.499804.pass.ja1/current/build/matlab</root>
+      <root>/Applications/MATLAB_R2021a.app</root>
       <toolboxes>
-        <toolbox name="fixedpoint" />
         <toolbox name="matlabcoder" />
-        <toolbox name="matlabhdlcoder" />
-        <toolbox name="embeddedcoder" />
+        <toolbox name="neuralnetwork" />
       </toolboxes>
-      <toolbox>
-        <fixedpoint>
-          <enabled>true</enabled>
-        </fixedpoint>
-      </toolbox>
       <toolbox>
         <matlabcoder>
           <enabled>true</enabled>
         </matlabcoder>
       </toolbox>
       <toolbox>
-        <matlabhdlcoder>
+        <neuralnetwork>
           <enabled>true</enabled>
-        </matlabhdlcoder>
-      </toolbox>
-      <toolbox>
-        <embeddedcoder>
-          <enabled>true</enabled>
-        </embeddedcoder>
+        </neuralnetwork>
       </toolbox>
     </matlab>
     <platform>
