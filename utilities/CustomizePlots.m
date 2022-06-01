@@ -270,6 +270,9 @@ if ~isempty(Settings)
         RowNames = cellfun(@(x)sprintf('Plot %d',x),num2cell(1:numel(Settings)),'UniformOutput',false);
         
         % Set table
+        idxEnum = cellfun(@isenum, Summary);
+        Summary(idxEnum) = cellfun(@char, Summary(idxEnum), 'Uniformoutput',false); %#ok<AGROW> 
+        
         set(handles.SettingsTable(pIndex),...
             'RowName',RowNames,...
             'ColumnName',Fields,...
@@ -292,5 +295,6 @@ else
             'ColumnEditable',true(1,numel(Fields)),...
             'ColumnFormat',ColumnFormat(:)',...
             'Data',Summary);
+        
     end
 end
