@@ -191,6 +191,9 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         % DEBUG
         FlagDebug = true
         
+        % In version 2 we will prevent the backend code from showing any UI
+        % elements such as dialog boxes etc.
+        useUI = true;
     end
         
         

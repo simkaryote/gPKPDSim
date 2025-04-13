@@ -52,10 +52,13 @@ if ~isempty(obj.ModelObj)
     
     ErrorCount = 0;
     
-    Title = 'Running Population';
-    hWbar = UIUtilities.CustomWaitbar(0,Title,'',false);
-    
-    UIUtilities.CustomWaitbar(1/(obj.NumPopulationRuns+2),hWbar,'Accelerating model...');
+    if obj.useUI
+        Title = 'Running Population';
+        hWbar = UIUtilities.CustomWaitbar(0,Title,'',false);        
+        UIUtilities.CustomWaitbar(1/(obj.NumPopulationRuns+2),hWbar,'Accelerating model...');
+        fprintf("Accelerating model...");
+    end
+
     % Accelerate model
     sbioaccelerate(obj.ModelObj,[],obj.SelectedDoses(IsDoseSelected));
     
@@ -79,7 +82,10 @@ if ~isempty(obj.ModelObj)
     NewPopSimData = [];
     
     for rIndex = 1:obj.NumPopulationRuns
-        UIUtilities.CustomWaitbar((rIndex+1)/(obj.NumPopulationRuns+2),hWbar,sprintf('Running %d of %d...',rIndex,obj.NumPopulationRuns));
+        if obj.useUI
+            UIUtilities.CustomWaitbar((rIndex+1)/(obj.NumPopulationRuns+2),hWbar,sprintf('Running %d of %d...',rIndex,obj.NumPopulationRuns));
+            fprintf("Running %d of %d\n", rIndex, obj.NumPopulationRuns);
+        end
         
         % Rescale NewVal for the parameters with "log" scales
         NewVal = MeanVec .* ( 1 + CVVec.*RandNum(:,rIndex)');
@@ -174,7 +180,11 @@ if ~isempty(obj.ModelObj)
     
     % Extract data after running in order to make plotting
     % quicker
-    UIUtilities.CustomWaitbar((obj.NumPopulationRuns+1)/(obj.NumPopulationRuns+2),hWbar,'Extracting species data...');
+    if obj.useUI
+        UIUtilities.CustomWaitbar((obj.NumPopulationRuns+1)/(obj.NumPopulationRuns+2),hWbar,'Extracting species data...');
+        fprintf("Extracting species data...\n");
+    end
+
     if ~isempty(NewPopSimData)
         NewPopSpeciesData = NewPopSimData.selectbyname(obj.PlotSpeciesTable(:,2));
         
@@ -203,9 +213,11 @@ if ~isempty(obj.ModelObj)
         obj.PopSummaryData = PKPD.PopulationSummary.empty(0,0);
     end
     
-    UIUtilities.CustomWaitbar(1,hWbar,'Done');
-    if ~isempty(hWbar) && ishandle(hWbar)
-        delete(hWbar);
-    end    
-    
+    if obj.useUI
+        UIUtilities.CustomWaitbar(1,hWbar,'Done');
+        if ~isempty(hWbar) && ishandle(hWbar)
+            delete(hWbar);
+        end    
+        fprintf("Done\n");
+    end
 end
