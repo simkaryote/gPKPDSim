@@ -389,6 +389,12 @@ classdef controller < handle
                     error('Unhandled task %s', deleteRun.task);
             end
         end
+        
+        function updatePopulationParameterCV(this, parameter)
+            idx = string({this.session.SelectedParams.Name}) == parameter.parameter;                        
+            assert(sum(idx) == 1);
+            this.session.SelectedParams(idx).PercCV = str2double(parameter.cv);
+        end
     end
 
     % These methods are used to marshall data from the Model (backend) to
