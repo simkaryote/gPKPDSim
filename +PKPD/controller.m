@@ -1,4 +1,10 @@
 classdef controller < handle
+    properties(Constant)
+        Version = 2.0
+        RevisionDate = datetime("now");
+
+    end
+
     properties
         app
         projectPath (1,1) string
@@ -24,7 +30,7 @@ classdef controller < handle
             % All messages from the UI must start with the "update" prefix.
             % These eventNames are update functions in the controller so we
             % dispatch them directly here.
-            assert(eventName.startsWith("update"));
+            assert(eventName.startsWith("update") || eventName.startsWith("menu"));
 
             try
                 this.(eventName)(e);
@@ -237,16 +243,22 @@ classdef controller < handle
     methods(Access=public)
         % Menu callback function.
         function runTask(this, ~)
+
             [status, message] = this.session.run;
-            switch this.session.Task
-                case 'Simulation'
-                    notifyUI(this, 'NewSimulation');
-                case 'Fitting'
-                    notifyUI(this, 'NewFitting');
-                case 'Population'
-                    notifyUI(this, 'NewPopulation');
-                otherwise
-                    error('Unknown functionalty %s', this.session.Task);
+
+            if status
+                switch this.session.Task
+                    case 'Simulation'
+                        notifyUI(this, 'NewSimulation');
+                    case 'Fitting'
+                        notifyUI(this, 'NewFitting');
+                    case 'Population'
+                        notifyUI(this, 'NewPopulation');
+                    otherwise
+                        error('Unknown functionalty %s', this.session.Task);
+                end
+            else
+                error("Failed to run %s with message: %s", this.session.Task, message);
             end
         end
 
@@ -294,7 +306,7 @@ classdef controller < handle
 
             this.session = newSession;
             this.projectPath = projectPath;
-            
+
             % We don't want the backend to use UI in the new version. The
             % old version (version 1) will continue to do what it did
             % before.
@@ -331,7 +343,7 @@ classdef controller < handle
 
             this.session.Task = task;
         end
-    
+
         function updatePlotOverlay(this, overlay)
             switch overlay.type
                 case 'simulationprofilenotes'
@@ -340,7 +352,7 @@ classdef controller < handle
                     this.session.FlagPopOverlay = overlay.plotOverlay;
                 otherwise
                     error('Unknown overlay type %s', overlay.type);
-            end            
+            end
         end
 
         function updateNumberOfSimulations(this, numSimulations)
@@ -354,11 +366,11 @@ classdef controller < handle
             % need. So do that here and then investigate.
             idx = cellfun(@(x) x{2} == string(parameter.parameter), this.session.SimVariant.Content);
             assert(sum(idx) == 1);
-            quad = this.session.SimVariant.Content{idx};            
+            quad = this.session.SimVariant.Content{idx};
             quad{4} = str2double(parameter.value);
             this.session.SimVariant.Content{idx} = quad;
         end
-    
+
         function updatePlotScale(this, plotScale)
             this.session.SimulationPlotSettings(plotScale.plotIndex).YScale = plotScale.yScale;
         end
@@ -371,12 +383,12 @@ classdef controller < handle
                 doseObject.(doseFields{i}) = dose.rows.(doseFields{i});
             end
         end
-        
+
         function updateDoseActive(this, doseActive)
             doseObject = sbioselect(this.session.SelectedDoses, 'Name', doseActive.name);
-            doseObject.Active = doseActive.active;            
+            doseObject.Active = doseActive.active;
         end
-    
+
         function updateDeleteRun(this, deleteRun)
             switch deleteRun.task
                 case 'SimulationProfileNotes'
@@ -389,11 +401,37 @@ classdef controller < handle
                     error('Unhandled task %s', deleteRun.task);
             end
         end
-        
+
         function updatePopulationParameterCV(this, parameter)
-            idx = string({this.session.SelectedParams.Name}) == parameter.parameter;                        
+            idx = string({this.session.SelectedParams.Name}) == parameter.parameter;
             assert(sum(idx) == 1);
             this.session.SelectedParams(idx).PercCV = str2double(parameter.cv);
+        end
+
+        function updatePlotLayout(this, plotLayout)
+            this.session.SelectedPlotLayout = plotLayout.layout;
+        end
+    end
+
+    % Menu item callbacks.
+    methods(Access=private)
+        function menuOpenSession(this, ~)
+            selectedDir = uigetdir;
+            this.loadProject(selectedDir);
+        end
+
+        function menuRun(this, task)
+            this.runTask(task);
+        end
+
+        function menuAbout(this, ~)
+            Name = "gPKPDSim";
+            Logo = [];
+            SupportInfo = "foobar";
+
+            % Reuse the old about dialog. Probably should update to
+            % something more modern.
+            UIUtilities.AboutDialog(Name, this.Version, this.RevisionDate, Logo, SupportInfo);
         end
     end
 
