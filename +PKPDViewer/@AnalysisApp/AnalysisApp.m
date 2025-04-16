@@ -63,7 +63,7 @@ classdef (Sealed) AnalysisApp < matlab.mixin.SetGet & UIUtilities.ConstructorAcc
         TitleStr %Title of the application
     end
     
-    properties (Dependent=true);
+    properties (Dependent=true)
         Position %Position of the window
     end
     

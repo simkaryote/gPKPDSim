@@ -191,6 +191,9 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         % DEBUG
         FlagDebug = true
         
+        % In version 2 we will prevent the backend code from showing any UI
+        % elements such as dialog boxes etc.
+        useUI = true;
     end
         
         
@@ -820,7 +823,10 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
     methods
         
         function set.SelectedPlotLayout(obj,Value)
-            Value = validatestring(Value,obj.PlotLayoutOptions);
+            % See no reason why we would constrain the layout (mxn) chosen
+            % by a user. There could be some issues with the stored
+            % plotIndex but that might not be something we care about. 
+            % Value = validatestring(Value,obj.PlotLayoutOptions);
             obj.SelectedPlotLayout = Value;
         end
         
