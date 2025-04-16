@@ -1,8 +1,8 @@
 classdef controller < handle
     properties(Constant)
         Version = 2.0
-        RevisionDate = datetime("now");
-
+        RevisionDate = datetime("now");        
+        PreferencesName = "PKPDViewer_AnalysisApp";
     end
 
     properties
@@ -53,15 +53,16 @@ classdef controller < handle
                     case "LoadProject"
                         trimmedSession = this.trimSession();
                         fprintf("Sending event " + eventName + " to app\n");
-                        % sendEventToHTMLSource(this.app.HTML, eventName, trimmedSession);
                         message = trimmedSession;
                     case "NewSimulation"
                         simulationResults = this.getSimulationResults();
-                        % sendEventToHTMLSource(this.app.HTML, eventName, simulationResults);
                         message = simulationResults;
                     case "NewPopulation"
                         populationSimulationResults = this.getPopulationSimulationResults();
                         message = populationSimulationResults;
+                    case "RecentFiles"
+                        message = getpref(this.PreferencesName, eventName);                        
+
                     otherwise
                         fprintf("Unhandled event: %s\n", eventName);
                 end
@@ -69,53 +70,6 @@ classdef controller < handle
             else
                 fprintf("No app to send event " + eventName + "\n");
             end
-        end
-
-        function loadCaseStudy(this, caseStudyNumber)
-            csPath = "/Users/pax/projects/gPKPDSim/Supp Info - 2nd Submission/";
-
-            switch caseStudyNumber
-                case 1
-                    csPath = csPath + "1) Case Study 1";
-                case 2
-                    csPath = csPath + "2) Case Study 2";
-                case 3
-                    csPath = csPath + "3) Case Study 3";
-                case 4
-                    csPath = csPath + "4) Case Study 4";
-                otherwise
-                    error('No case study for index = %d', caseStudyNumber);
-            end
-
-            this.loadProject(csPath);
-        end
-
-        function jsonsession = trimmedToJSON(this)
-            jsonsession = jsonencode(this.trimSession);
-        end
-
-        function saveAllCaseStudiesToJSON(this)
-            for i=1:4
-                this.loadCaseStudy(i);
-                this.saveSessionToJSON(sprintf('debugConfig_%d.js', i));
-            end
-        end
-
-        % This function is used for debugging. It writes out a session
-        % appropriate for the UI in JSON and puts the resulting file in a
-        % specific location where the UI can load it. This allows us to
-        % load realistic sessions in the UI without having the Controller
-        % or the Model around (so no MATLAB).
-        function saveSessionToJSON(this, outputFileName)
-            arguments
-                this
-                outputFileName (1,1) string
-            end
-            fileLocation = "/Users/pax/projects/gPKPDSim/gPKPDSimUI/test/casestudies/";
-            f = fopen(fileLocation + outputFileName, "w");
-            fprintf(f, "%s", "export const debugConfig = ");
-            fprintf(f, "%s", this.trimmedToJSON());
-            fclose(f);
         end
 
         % Generate a session in the form that is shared with the UI. Not
@@ -234,9 +188,78 @@ classdef controller < handle
             trimmedSession.DataFittingTask.ResponseMap = cell2table(this.session.ResponseMap, 'VariableNames', ["DataName", "ModelComponentName"]);
             trimmedSession.DataFittingTask.DoseMap = cell2table(this.session.DoseMap, 'VariableNames', ["DataName", "DoseTarget"]);
 
+            % Recent Files List
+            trimmedSession.RecentFiles = getpref(this.PreferencesName, "RecentFiles");
+
             warning(warnState);
         end
 
+    end
+
+    % Utilities
+    methods
+        function loadCaseStudy(this, caseStudyNumber)
+            csPath = "/Users/pax/projects/gPKPDSim/Supp Info - 2nd Submission/";
+
+            switch caseStudyNumber
+                case 1
+                    csPath = csPath + "1) Case Study 1";
+                case 2
+                    csPath = csPath + "2) Case Study 2";
+                case 3
+                    csPath = csPath + "3) Case Study 3";
+                case 4
+                    csPath = csPath + "4) Case Study 4";
+                otherwise
+                    error('No case study for index = %d', caseStudyNumber);
+            end
+
+            this.loadProject(csPath);
+        end
+
+        function jsonsession = trimmedToJSON(this)
+            jsonsession = jsonencode(this.trimSession);
+        end
+
+        function saveAllCaseStudiesToJSON(this)
+            for i=1:4
+                this.loadCaseStudy(i);
+                this.saveSessionToJSON(sprintf('debugConfig_%d.js', i));
+            end
+        end
+
+        % This function is used for debugging. It writes out a session
+        % appropriate for the UI in JSON and puts the resulting file in a
+        % specific location where the UI can load it. This allows us to
+        % load realistic sessions in the UI without having the Controller
+        % or the Model around (so no MATLAB).
+        function saveSessionToJSON(this, outputFileName)
+            arguments
+                this
+                outputFileName (1,1) string
+            end
+            fileLocation = "/Users/pax/projects/gPKPDSimUI/test/casestudies/";
+            f = fopen(fileLocation + outputFileName, "w");
+            fprintf(f, "%s", "export const debugConfig = ");
+            fprintf(f, "%s", this.trimmedToJSON());
+            fclose(f);
+        end
+        
+        % function saveUserPreference(this, fieldName, newValue)
+        %     switch fieldName
+        %         case "RecentFiles"
+        %             recentFiles = getpref(this.PreferencesName, fieldName);
+        %             recentFiles = vertcat({char(newValue)}, recentFiles);
+        %             % Limit the number of recent files to 5
+        %             recentFiles = recentFiles(1:5);
+        %             setpref(this.PreferencesName, fieldName, recentFiles);
+        %             this.notifyUI(fieldName);
+        %         case ["DataPath", "LastPath", "Position"]
+        %             setpref(this.PreferencesName, fieldName, newValue);
+        %         otherwise
+        %             error("Preference name %s not found.", fieldName);
+        %     end            
+        % end
     end
 
     % Actions on the server side
@@ -317,6 +340,10 @@ classdef controller < handle
             warning('off', 'SimBiology:REACTIONRATE_INVALID');
 
             this.notifyUI("LoadProject");
+
+            % if ~isempty(this.app)
+            %     this.saveUserPreference(projectPath);
+            % end
         end
     end
 
