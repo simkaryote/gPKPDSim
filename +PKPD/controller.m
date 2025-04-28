@@ -1,7 +1,7 @@
 classdef controller < handle
     properties(Constant)
         Version = 2.0
-        RevisionDate = datetime("now");        
+        RevisionDate = datetime("now");
         PreferencesName = "PKPDViewer_AnalysisApp";
     end
 
@@ -33,6 +33,7 @@ classdef controller < handle
             assert(eventName.startsWith("update") || eventName.startsWith("menu"));
 
             try
+                fprintf("Handling event: %s\n", eventName);
                 this.(eventName)(e);
             catch p
                 fprintf('Error calling the %s method. %s\n', eventName, p.message);
@@ -61,7 +62,7 @@ classdef controller < handle
                         populationSimulationResults = this.getPopulationSimulationResults();
                         message = populationSimulationResults;
                     case "RecentFiles"
-                        message = getpref(this.PreferencesName, eventName);                        
+                        message = getpref(this.PreferencesName, eventName);
 
                     otherwise
                         fprintf("Unhandled event: %s\n", eventName);
@@ -75,7 +76,7 @@ classdef controller < handle
         % Generate a session in the form that is shared with the UI. Not
         % all data is necessary for the UI and some formats are changed to
         % make things easier to consume in the JS code.
-        function trimmedSession = trimSession(this)
+        function sessionForUI = trimSession(this)
             warnState = warning('query', 'MATLAB:structOnObject');
             warning('off', 'MATLAB:structOnObject');
             % Fields that we are going to send as is.
@@ -90,10 +91,10 @@ classdef controller < handle
                 ];
 
             for i = 1:numel(selectedFields)
-                trimmedSession.(selectedFields(i)) = this.session.(selectedFields(i));
+                sessionForUI.(selectedFields(i)) = this.session.(selectedFields(i));
             end
 
-            trimmedSession.ProjectName = this.projectName;
+            sessionForUI.ProjectName = this.projectName;
 
             % Transformations on data to simplify the communication.
 
@@ -102,47 +103,47 @@ classdef controller < handle
             % the UI the variants in order.
             if ~isempty(this.session.SelectedVariants)
                 variants = this.session.SelectedVariants;
-                trimmedSession.Variants = table([variants.Active]', string({variants.Name})', string({variants.Tag})', 'VariableNames', ["Active", "Name", "Tag"]);
-                trimmedSession.Variants = trimmedSession.Variants(this.session.SelectedVariantsOrder,:);
+                sessionForUI.Variants = table([variants.Active]', string({variants.Name})', string({variants.Tag})', 'VariableNames', ["Active", "Name", "Tag"]);
+                sessionForUI.Variants = sessionForUI.Variants(this.session.SelectedVariantsOrder,:);
             else
-                trimmedSession.Variants = table.empty;
+                sessionForUI.Variants = table.empty;
             end
 
             % Selected Doses
             dosesFields = ["Active", "Name", "Type", "TargetName", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate"];
             s = arrayfun(@(x)struct(x), this.session.SelectedDoses);
             fieldsToRemove = setdiff(fields(s), dosesFields);
-            trimmedSession.Doses = rmfield(s, fieldsToRemove);
+            sessionForUI.Doses = rmfield(s, fieldsToRemove);
 
             % Simulation Time Specification
-            trimmedSession.TimeSettings = [this.session.StartTime, this.session.TimeStep, this.session.StopTime];
+            sessionForUI.TimeSettings = [this.session.StartTime, this.session.TimeStep, this.session.StopTime];
 
             % Selected parameters
-            trimmedSession.Parameters = arrayfun(@(x)struct(x), this.session.SelectedParams);
-            trimmedSession.Parameters = struct2table(trimmedSession.Parameters);
+            sessionForUI.Parameters = arrayfun(@(x)struct(x), this.session.SelectedParams);
+            sessionForUI.Parameters = struct2table(sessionForUI.Parameters);
 
             % PlotSpeciesTable
-            trimmedSession.PlotSpeciesTable = cell2table(this.session.PlotSpeciesTable, 'VariableNames', ["PlotIndex", "StateName", "DisplayName"]);
-            dataUsedTF = cellfun(@(x)ischar(x), trimmedSession.PlotSpeciesTable.PlotIndex);
-            trimmedSession.PlotSpeciesTable.PlotIndex(~dataUsedTF) = {'NaN'};
-            trimmedSession.PlotSpeciesTable.PlotIndex = cellfun(@(x)str2double(x), trimmedSession.PlotSpeciesTable.PlotIndex);
-            trimmedSession.PlotSpeciesTable.StateName = string(trimmedSession.PlotSpeciesTable.StateName);
-            trimmedSession.PlotSpeciesTable.DisplayName = [];
-            trimmedSession.PlotSpeciesTable.LineStyle = string(this.session.SpeciesLineStyles);
+            sessionForUI.PlotSpeciesTable = cell2table(this.session.PlotSpeciesTable, 'VariableNames', ["PlotIndex", "StateName", "DisplayName"]);
+            dataUsedTF = cellfun(@(x)ischar(x), sessionForUI.PlotSpeciesTable.PlotIndex);
+            sessionForUI.PlotSpeciesTable.PlotIndex(~dataUsedTF) = {'NaN'};
+            sessionForUI.PlotSpeciesTable.PlotIndex = cellfun(@(x)str2double(x), sessionForUI.PlotSpeciesTable.PlotIndex);
+            sessionForUI.PlotSpeciesTable.StateName = string(sessionForUI.PlotSpeciesTable.StateName);
+            sessionForUI.PlotSpeciesTable.DisplayName = [];
+            sessionForUI.PlotSpeciesTable.LineStyle = string(this.session.SpeciesLineStyles);
             % will need the plot settings for the plots used.
-            usedPlotsIdx = trimmedSession.PlotSpeciesTable.PlotIndex(dataUsedTF);
+            usedPlotsIdx = sessionForUI.PlotSpeciesTable.PlotIndex(dataUsedTF);
 
             % PlotDatasetTable
             if ~isempty(this.session.PlotDatasetTable)
-                trimmedSession.PlotDatasetTable = cell2table(this.session.PlotDatasetTable, 'VariableNames', ["PlotIndex", "StateName", "DisplayName"]);
-                dataUsedTF = cellfun(@(x)ischar(x), trimmedSession.PlotDatasetTable.PlotIndex);
-                trimmedSession.PlotDatasetTable.PlotIndex(~dataUsedTF) = {'NaN'};
-                trimmedSession.PlotDatasetTable.PlotIndex = cellfun(@(x)str2double(x), trimmedSession.PlotDatasetTable.PlotIndex);
-                trimmedSession.PlotDatasetTable.StateName = string(trimmedSession.PlotDatasetTable.StateName);
-                trimmedSession.PlotDatasetTable.DisplayName = [];
-                plotIndexUsedByDataset = trimmedSession.PlotDatasetTable.PlotIndex(dataUsedTF);
+                sessionForUI.PlotDatasetTable = cell2table(this.session.PlotDatasetTable, 'VariableNames', ["PlotIndex", "StateName", "DisplayName"]);
+                dataUsedTF = cellfun(@(x)ischar(x), sessionForUI.PlotDatasetTable.PlotIndex);
+                sessionForUI.PlotDatasetTable.PlotIndex(~dataUsedTF) = {'NaN'};
+                sessionForUI.PlotDatasetTable.PlotIndex = cellfun(@(x)str2double(x), sessionForUI.PlotDatasetTable.PlotIndex);
+                sessionForUI.PlotDatasetTable.StateName = string(sessionForUI.PlotDatasetTable.StateName);
+                sessionForUI.PlotDatasetTable.DisplayName = [];
+                plotIndexUsedByDataset = sessionForUI.PlotDatasetTable.PlotIndex(dataUsedTF);
             else
-                trimmedSession.PlotDatasetTable = cell2table(cell(0,3), 'VariableNames', ["PlotIndex", "StateName", "DisplayName"]);
+                sessionForUI.PlotDatasetTable = cell2table(cell(0,3), 'VariableNames', ["PlotIndex", "StateName", "DisplayName"]);
                 plotIndexUsedByDataset = [];
             end
 
@@ -150,46 +151,46 @@ classdef controller < handle
             usedPlotsIdx = unique([usedPlotsIdx, plotIndexUsedByDataset]);
 
             % SimulationPlotSettings
-            trimmedSession.SimulationPlotSettings = struct2table(this.session.SimulationPlotSettings(usedPlotsIdx));
-            trimmedSession.SimulationPlotSettings.PlotIndex = usedPlotsIdx;
+            sessionForUI.SimulationPlotSettings = struct2table(this.session.SimulationPlotSettings(usedPlotsIdx));
+            sessionForUI.SimulationPlotSettings.PlotIndex = usedPlotsIdx;
 
             % % SimProfileNotes + simulation data
-            trimmedSession.SimulationPlotOverlay = this.session.FlagSimOverlay;
-            trimmedSession.SimulationProfileNotes = this.getSimulationResults();
+            sessionForUI.SimulationPlotOverlay = this.session.FlagSimOverlay;
+            sessionForUI.SimulationProfileNotes = this.getSimulationResults();
 
             % PopulationProfileNotes + simulation data
-            trimmedSession.PopulationPlotOverlay = this.session.FlagPopOverlay;
-            trimmedSession.PopulationProfileNotes = this.getPopulationSimulationResults();
+            sessionForUI.PopulationPlotOverlay = this.session.FlagPopOverlay;
+            sessionForUI.PopulationProfileNotes = this.getPopulationSimulationResults();
 
             % Dataset information
-            trimmedSession.DataSet.Meta = struct(this.session.DatasetTable);
-            trimmedSession.DataSet.Meta.GroupColors = rgb2hex(this.session.GroupColors);
+            sessionForUI.DataSet.Meta = struct(this.session.DatasetTable);
+            sessionForUI.DataSet.Meta.GroupColors = rgb2hex(this.session.GroupColors);
 
             % Maybe we don't send the entire dataset but only the time
             % courses of interest? How do we determine the state of
             % interest?
             if isa(this.session.DataToFit, 'dataset')
-                trimmedSession.DataSet.Data = dataset2table(this.session.DataToFit);
+                sessionForUI.DataSet.Data = dataset2table(this.session.DataToFit);
             else
-                trimmedSession.DataSet.Data = this.session.DataToFit;
+                sessionForUI.DataSet.Data = this.session.DataToFit;
             end
 
             % Send the time-course split by group.
-            groupLabel = trimmedSession.DataSet.Meta.Group;
+            groupLabel = sessionForUI.DataSet.Meta.Group;
             if ~isempty(groupLabel)
-                groups = unique(trimmedSession.DataSet.Data.(trimmedSession.DataSet.Meta.Group));
+                groups = unique(sessionForUI.DataSet.Data.(sessionForUI.DataSet.Meta.Group));
                 for i = 1:numel(groups)
-                    group_i_tf = trimmedSession.DataSet.Data.(groupLabel) == i;
-                    trimmedSession.DataSet.GroupData{i} = trimmedSession.DataSet.Data(group_i_tf,:);
+                    group_i_tf = sessionForUI.DataSet.Data.(groupLabel) == i;
+                    sessionForUI.DataSet.GroupData{i} = sessionForUI.DataSet.Data(group_i_tf,:);
                 end
             end
 
             % DataFitting Task
-            trimmedSession.DataFittingTask.ResponseMap = cell2table(this.session.ResponseMap, 'VariableNames', ["DataName", "ModelComponentName"]);
-            trimmedSession.DataFittingTask.DoseMap = cell2table(this.session.DoseMap, 'VariableNames', ["DataName", "DoseTarget"]);
+            sessionForUI.DataFittingTask.ResponseMap = cell2table(this.session.ResponseMap, 'VariableNames', ["DataName", "ModelComponentName"]);
+            sessionForUI.DataFittingTask.DoseMap = cell2table(this.session.DoseMap, 'VariableNames', ["DataName", "DoseTarget"]);
 
             % Recent Files List
-            trimmedSession.RecentFiles = getpref(this.PreferencesName, "RecentFiles");
+            sessionForUI.RecentFiles = getpref(this.PreferencesName, "RecentFiles");
 
             warning(warnState);
         end
@@ -244,22 +245,33 @@ classdef controller < handle
             fprintf(f, "%s", this.trimmedToJSON());
             fclose(f);
         end
-        
-        % function saveUserPreference(this, fieldName, newValue)
-        %     switch fieldName
-        %         case "RecentFiles"
-        %             recentFiles = getpref(this.PreferencesName, fieldName);
-        %             recentFiles = vertcat({char(newValue)}, recentFiles);
-        %             % Limit the number of recent files to 5
-        %             recentFiles = recentFiles(1:5);
-        %             setpref(this.PreferencesName, fieldName, recentFiles);
-        %             this.notifyUI(fieldName);
-        %         case ["DataPath", "LastPath", "Position"]
-        %             setpref(this.PreferencesName, fieldName, newValue);
-        %         otherwise
-        %             error("Preference name %s not found.", fieldName);
-        %     end            
-        % end
+
+        function saveUserPreference(this, fieldName, newValue)
+            switch fieldName
+                case "RecentFiles"
+                    recentFiles = getpref(this.PreferencesName, fieldName);
+
+                    [inListTF, currentIndex] = ismember(newValue, recentFiles);
+
+                    if ~inListTF
+                        recentFiles = vertcat({char(newValue)}, recentFiles);
+                    else
+                        recentFiles(currentIndex) = [];
+                        recentFiles = vertcat(newValue, recentFiles);
+                    end
+
+                    % Limit the number of recent files to 5
+                    if numel(recentFiles) > 5
+                        recentFiles = recentFiles(1:5);
+                    end
+                    setpref(this.PreferencesName, fieldName, recentFiles);
+                    this.notifyUI(fieldName);
+                case ["DataPath", "LastPath", "Position"]
+                    setpref(this.PreferencesName, fieldName, newValue);
+                otherwise
+                    error("Preference name %s not found.", fieldName);
+            end
+        end
     end
 
     % Actions on the server side
@@ -285,6 +297,8 @@ classdef controller < handle
             end
         end
 
+        % Load a project. This function also updates the RecentFiles
+        % preference and notifies the UI of the update those.
         function loadProject(this, projectPath)
             arguments
                 this (1,1) PKPD.controller
@@ -341,9 +355,10 @@ classdef controller < handle
 
             this.notifyUI("LoadProject");
 
-            % if ~isempty(this.app)
-            %     this.saveUserPreference(projectPath);
-            % end
+            % Save the recentFiles change in the preferences.
+            if ~isempty(this.app)
+                this.saveUserPreference("RecentFiles", projectPath);
+            end
         end
     end
 
@@ -438,12 +453,90 @@ classdef controller < handle
         function updatePlotLayout(this, plotLayout)
             this.session.SelectedPlotLayout = plotLayout.layout;
         end
+
+        function updatePlotShow(this, showPlot)
+            switch showPlot.Task
+                case 'simulationprofilenotes'
+                    field = "SimProfileNotes";
+                case 'populationsimulationprofilenotes'
+                    field = "PopProfileNotes";
+                otherwise
+                    error("Unknown task type: %s", showPlot.Task);
+            end
+            this.session.(field)(showPlot.Run).Show = showPlot.Show;
+        end
+
+        function updatePlotColor(this, newColor)
+            switch newColor.Task
+                case 'simulationprofilenotes'
+                    field = "SimProfileNotes";
+                case 'populationsimulationprofilenotes'
+                    field = "PopProfileNotes";
+                otherwise
+                    error("Unknown task type: %s", showPlot.Task);
+            end
+            this.session.(field)(newColor.Run).Color = hex2rgb(newColor.Color);
+        end
+
+        function updatePlotContent(this, plotContent)
+            addTF = plotContent.action == "add";
+            switch plotContent.type
+                case 'species'
+                    % TODO: old version only support a state displaying in
+                    % one plot. Now we support it plotting in multiple
+                    % places. I am going to preserve the session object as
+                    % it was for backwards compat and fix for new version
+                    % later.
+                    speciesNames = string(this.session.PlotSpeciesTable(:,2));
+                    idx = speciesNames == plotContent.content;
+                    if addTF
+                        % do we have a sourceID if so its a move
+                        this.session.PlotSpeciesTable{idx,1} = num2str(plotContent.plotIndex);
+                    else
+                        this.session.PlotSpeciesTable{idx,1} = '';
+                    end
+                otherwise
+                    disp('asf');
+            end
+            % TODO: keep this for debugging.
+            this.session.PlotSpeciesTable
+        end
+
+        function updatePlotStyles(this, plotStyle)
+            speciesNames = string(this.session.PlotSpeciesTable(:,2));
+            idx = speciesNames == plotStyle.speciesName;
+            assert(sum(idx) == 1);
+            this.session.setSpeciesLineStyles(find(idx), plotStyle.lineStyle);
+        end
+
+        function updatePlotExport(this, plotExport)
+            switch plotExport.Task
+                case 'simulationprofilenotes'
+                    assert(plotExport.Run <= numel(this.session.SimProfileNotes));
+                    this.session.SimProfileNotes(plotExport.Run).Export = plotExport.Export;
+                otherwise
+                    error('unhandled case %s', plotExport.Task)
+            end
+        end
+
+        function updateRunDescription(this, runDescription)
+            switch runDescription.Task
+                case 'simulationprofilenotes'
+                    this.session.SimProfileNotes(runDescription.Run).Description = runDescription.Description;
+                otherwise
+                    error('unhandled case %s', runDescription.Task);
+            end
+        end
     end
 
     % Menu item callbacks.
     methods(Access=private)
-        function menuOpenSession(this, ~)
-            selectedDir = uigetdir;
+        function menuOpenSession(this, projectPath)
+            if isempty(projectPath)
+                selectedDir = uigetdir;
+            else
+                selectedDir = projectPath.sessionData;
+            end
             this.loadProject(selectedDir);
         end
 
@@ -511,4 +604,3 @@ classdef controller < handle
         end
     end
 end
-
