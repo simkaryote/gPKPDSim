@@ -61,6 +61,8 @@ classdef controller < handle
                     case "NewPopulation"
                         populationSimulationResults = this.getPopulationSimulationResults();
                         message = populationSimulationResults;
+                    case "NewFitting"
+                        message = this.getDataFittingResults();
                     case "RecentFiles"
                         message = getpref(this.PreferencesName, eventName);
 
@@ -162,6 +164,9 @@ classdef controller < handle
             sessionForUI.PopulationPlotOverlay = this.session.FlagPopOverlay;
             sessionForUI.PopulationProfileNotes = this.getPopulationSimulationResults();
 
+            % FittingProfileNotes + simulation data with estimated params
+            sessionForUI.DataFittingProfileNotes = this.getDataFittingResults();
+
             % Dataset information
             sessionForUI.DataSet.Meta = struct(this.session.DatasetTable);
             sessionForUI.DataSet.Meta.GroupColors = rgb2hex(this.session.GroupColors);
@@ -188,6 +193,10 @@ classdef controller < handle
             % DataFitting Task
             sessionForUI.DataFittingTask.ResponseMap = cell2table(this.session.ResponseMap, 'VariableNames', ["DataName", "ModelComponentName"]);
             sessionForUI.DataFittingTask.DoseMap = cell2table(this.session.DoseMap, 'VariableNames', ["DataName", "DoseTarget"]);
+            sessionForUI.DataFittingTask.DatasetHeaders = this.session.DatasetTable.Headers;
+            sessionForUI.DataFittingTask.TargetSpecies = string({this.session.SelectedSpecies.partiallyQualifiedName});
+            sessionForUI.DataFittingTask.PooledFitting = this.session.UsePooledFitting;
+            sessionForUI.DataFittingTask.ErrorType = this.session.FitErrorModel;
 
             % Recent Files List
             sessionForUI.RecentFiles = getpref(this.PreferencesName, "RecentFiles");
@@ -444,6 +453,21 @@ classdef controller < handle
             end
         end
 
+        function updateDeleteAllRuns(this, allRuns)
+            % Consider adding a trash can so that we can recover
+            % accidentally deleted runs.
+            switch allRuns.task
+                case 'SimulationProfileNotes'
+                    this.session.SimData = [];
+                    this.session.SimProfileNotes = PKPD.Profile.empty;
+                case 'PopulationSimulationProfileNotes'
+                    this.session.PopProfileNotes = PKPD.Profile.empty;
+                    this.session.PopSummaryData = PKPD.PopulationSummary.empty;
+                case 'DataFittingProfileNotes'
+                    disp('needs to be done');
+            end            
+        end
+
         function updatePopulationParameterCV(this, parameter)
             idx = string({this.session.SelectedParams.Name}) == parameter.parameter;
             assert(sum(idx) == 1);
@@ -496,7 +520,7 @@ classdef controller < handle
                         this.session.PlotSpeciesTable{idx,1} = '';
                     end
                 otherwise
-                    disp('asf');
+                    disp('Unhandled plotContent.type %s', plotContent.type);
             end
             % TODO: keep this for debugging.
             this.session.PlotSpeciesTable
@@ -519,6 +543,18 @@ classdef controller < handle
             end
         end
 
+        function updateAllExport(this, exportToggle)
+            switch exportToggle.task
+                case 'SimulationProfileNotes'                    
+                    array = this.session.SimProfileNotes;
+                case 'DataFittingProfileNotes'                    
+                    error('This has no analog in the old version');
+                case 'PopulationSimulationProfileNotes'
+                    array = this.session.PopProfileNotes;
+            end
+            arrayfun(@(x)setfield(x, 'Export', exportToggle.export), array);
+        end
+
         function updateRunDescription(this, runDescription)
             switch runDescription.Task
                 case 'simulationprofilenotes'
@@ -526,6 +562,21 @@ classdef controller < handle
                 otherwise
                     error('unhandled case %s', runDescription.Task);
             end
+        end
+        
+        function updateVariantActive(this, activeVariant)
+            variantNames = string({this.session.SelectedVariants.Name});
+            idx = variantNames == activeVariant.name;
+            assert(sum(idx) == 1);
+            this.session.SelectedVariants(idx).Active = activeVariant.active;            
+        end
+    
+        function updatePooledFitting(this, pooledFitting)
+            this.session.UsePooledFitting = pooledFitting.pooledFitting;
+        end
+        
+        function updateErrorType(this, errorModel)
+            this.session.FitErrorModel = errorModel.errorType;
         end
     end
 
@@ -559,24 +610,28 @@ classdef controller < handle
     % the UI (frontend).
     methods(Access=private)
         function simulationResults = getSimulationResults(this)
-            simProfileNotes = arrayfun(@(x)struct(x), this.session.SimProfileNotes);
-            simulationResults = struct2table(simProfileNotes, "AsArray", true);
-            simulationResults.Color = rgb2hex(simulationResults.Color);
-            simulationResults.Run = (1:height(simulationResults))';
-            simulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), simulationResults.ParametersTable, UniformOutput=false);
-            simulationResults.DosingTable = cell2table(simulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
-            simulationResults.DosingTable = [];
+            if ~isempty(this.session.SimProfileNotes)
+                simProfileNotes = arrayfun(@(x)struct(x), this.session.SimProfileNotes);
+                simulationResults = struct2table(simProfileNotes, "AsArray", true);
+                simulationResults.Color = rgb2hex(simulationResults.Color);
+                simulationResults.Run = (1:height(simulationResults))';
+                simulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), simulationResults.ParametersTable, UniformOutput=false);
+                simulationResults.DosingTable = cell2table(simulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
+                simulationResults.DosingTable = [];
 
-            % Send only the data that is being selected now. More data will
-            % be sent on demand.
-            simData = this.session.SimData;
-            simData = struct(simData);
-            fieldsToKeep = ["Data", "DataNames", "Time"];
-            simData = rmfield(simData, setdiff(fields(simData), fieldsToKeep));
-            for i = 1:numel(simData)
-                simData(i).Data = simData(i).Data';
+                % Send only the data that is being selected now. More data will
+                % be sent on demand.
+                simData = this.session.SimData;
+                simData = struct(simData);
+                fieldsToKeep = ["Data", "DataNames", "Time"];
+                simData = rmfield(simData, setdiff(fields(simData), fieldsToKeep));
+                for i = 1:numel(simData)
+                    simData(i).Data = simData(i).Data';
+                end
+                simulationResults.Data = simData';
+            else
+                simulationResults = [];
             end
-            simulationResults.Data = simData';
         end
 
         function populationSimulationResults = getPopulationSimulationResults(this)
@@ -599,7 +654,37 @@ classdef controller < handle
                 end
                 populationSimulationResults.Data = popSimData';
             else
-                populationSimulationResults = []; % todo, lets see if this is a good default.
+                populationSimulationResults = [];
+            end
+        end
+    
+        function dataFittingResults = getDataFittingResults(this)
+            if ~isempty(this.session.FitResults)
+                dataFittingProfileNotes = arrayfun(@(x)struct(x), this.session.FitResults);
+                fieldsToKeep = ["MSE", "SSE", "LogLikelihood", "AIC", "BIC", "DFE", "FitType"];
+                dataFittingProfileNotes = rmfield(dataFittingProfileNotes, setdiff(fields(dataFittingProfileNotes), fieldsToKeep));
+                dataFittingResults = struct2table(dataFittingProfileNotes, "AsArray", true);
+                
+                % We only support having one datafitting results.
+                assert(height(dataFittingResults) == 1);
+
+                dataFittingResults.Run = (1:height(dataFittingResults))';
+                dataFittingResults.Show = true;                
+                
+                % Since we only support one DataFittingResults, all the
+                % simdatas in FitSimData are 
+                fitSimData = this.session.FitSimData;
+                fitSimData = struct(fitSimData);
+                fieldsToKeep = ["Data", "DataNames", "Time"];
+                fitSimData = rmfield(fitSimData, setdiff(fields(fitSimData), fieldsToKeep));
+                for i = 1:numel(fitSimData)
+                    fitSimData(i).Data = fitSimData(i).Data';
+                    fitSimData(i).Color = rgb2hex(this.session.GroupColors(i,:));
+                    fitSimData(i).Group = i;
+                end
+                dataFittingResults.Data = fitSimData';
+            else
+                dataFittingResults = [];
             end
         end
     end
