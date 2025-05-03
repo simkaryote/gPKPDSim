@@ -216,7 +216,7 @@ function [StatusOk,Message] = runFitting(obj)
             end
 
             % Convert dataToFit to a SimData object for plotting.
-            UpdatedDataToFit = SimData(obj.DataToFit, TimeLabelFixed, GroupLabelFixed);
+            UpdatedDataToFit = SimData.constructFromTable(obj.DataToFit, TimeLabelFixed, GroupLabelFixed);
             for i = 1:length(UpdatedDataToFit)
                 UpdatedDataToFit(i).Name = 'Data To Fit';
             end
