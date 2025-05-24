@@ -55,7 +55,7 @@ end
 
 % Define contact info
 MWContact = {
-    'MathWorks Consulting'
+    'MathWorks Inc.'
     '3 Apple Hill Drive'
     'Natick, MA 01760-2098'    
     '+1 (508) 647-7000'};
@@ -101,8 +101,7 @@ hDlg = figure(...
     'Units','pixels',...
     'Position',[100 100 fw 2.5*hoff+lh],...
     'Resize','off',...
-    'Visible','off',...
-    'WindowStyle','modal');
+    'Visible', 'off');
 
 % Move to center screen
 movegui(hDlg,'center');

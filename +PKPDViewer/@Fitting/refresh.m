@@ -100,7 +100,7 @@ set(vObj.h.FitErrorModelPopup,'Value',MatchIndex);
 FitVal = {vObj.Data.SelectedParams.FittedVal}';
 CombinedFitValAndStdErr = cell(numel(FitVal),1);
 for index = 1:numel(FitVal)
-    for fIndex = 1:size(FitVal{index})
+    for fIndex = 1:size(FitVal{index},1)
         CombinedFitValAndStdErr{index,fIndex} = sprintf('%f + %f',FitVal{index}(fIndex,1),FitVal{index}(fIndex,2));        
     end    
 end

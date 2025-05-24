@@ -1,15 +1,18 @@
 classdef controller < handle
     properties(Constant)
         Version = 2.0
-        RevisionDate = datetime("now");
         PreferencesName = "PKPDViewer_AnalysisApp";
+        Debug = false;
     end
 
     properties
         app
         projectPath (1,1) string
         projectName (1,1) string
-        session PKPD.Analysis = PKPD.Analysis.empty
+        session PKPD.Analysis = PKPD.Analysis.empty        
+        RevisionDate = datetime("now");
+        FrontendSHA (1,1) string
+        BackendSHA (1,1) string
     end
 
     methods
@@ -18,6 +21,17 @@ classdef controller < handle
                 app = []
             end
             this.app = app;
+
+            % This may not be needed
+            [~, this.FrontendSHA] = system('git -C /Users/pax/projects/gPKPDSimUI rev-parse HEAD');
+            [~, this.BackendSHA] = system('git -C /Users/pax/projects/gPKPDSim rev-parse HEAD');
+            this.FrontendSHA = strip(this.FrontendSHA);
+            this.BackendSHA = strip(this.BackendSHA);
+
+            % hack for now to initialize preferences
+            if ~ispref(this.PreferencesName)
+                setpref(this.PreferencesName, 'RecentFiles', {});
+            end
         end
 
         % This is the distribution center for messages coming from the UI.
@@ -33,7 +47,10 @@ classdef controller < handle
             assert(eventName.startsWith("update") || eventName.startsWith("menu"));
 
             try
-                fprintf("Handling event: %s\n", eventName);
+                if this.Debug
+                    fprintf("Handling event: %s\n", eventName);
+                end
+                
                 this.(eventName)(e);
             catch p
                 fprintf('Error calling the %s method. %s\n', eventName, p.message);
@@ -42,7 +59,11 @@ classdef controller < handle
         end
 
         % Send events to the UI. No other function sends events to the UI
-        % other than this one.
+        % other than this one. This may not be a great solution for
+        % controller -> viewer comm because of the switch statement (don't
+        % want another string making the connections) but I do want to keep
+        % communication going through one function so I plan to look at
+        % this decision again and see if we can clean it up.
         function notifyUI(this, eventName)
             arguments
                 this
@@ -53,18 +74,22 @@ classdef controller < handle
                 switch eventName
                     case "LoadProject"
                         trimmedSession = this.trimSession();
-                        fprintf("Sending event " + eventName + " to app\n");
                         message = trimmedSession;
                     case "NewSimulation"
-                        simulationResults = this.getSimulationResults();
-                        message = simulationResults;
+                        message = this.getSimulationResults();
                     case "NewPopulation"
-                        populationSimulationResults = this.getPopulationSimulationResults();
-                        message = populationSimulationResults;
+                        message = this.getPopulationSimulationResults();
                     case "NewFitting"
                         message = this.getDataFittingResults();
+
                     case "RecentFiles"
                         message = getpref(this.PreferencesName, eventName);
+
+                    case "updateParameters"
+                        message = this.getParameters();                        
+
+                    case "updateSelectedVariants"
+                        message = this.getSelectedVariants();
 
                     otherwise
                         fprintf("Unhandled event: %s\n", eventName);
@@ -101,18 +126,20 @@ classdef controller < handle
             % Transformations on data to simplify the communication.
 
             % Selected Variants.
-            % Sort the names using the VariantOrder and supply
-            % the UI the variants in order.
-            if ~isempty(this.session.SelectedVariants)
-                variants = this.session.SelectedVariants;
-                sessionForUI.Variants = table([variants.Active]', string({variants.Name})', string({variants.Tag})', 'VariableNames', ["Active", "Name", "Tag"]);
-                sessionForUI.Variants = sessionForUI.Variants(this.session.SelectedVariantsOrder,:);
-            else
-                sessionForUI.Variants = table.empty;
-            end
+            % % Sort the names using the VariantOrder and supply
+            % % the UI the variants in order.
+            % if ~isempty(this.session.SelectedVariants)
+            %     variants = this.session.SelectedVariants;
+            %     sessionForUI.Variants = table([variants.Active]', string({variants.Name})', string({variants.Tag})', 'VariableNames', ["Active", "Name", "Tag"]);
+            %     sessionForUI.Variants = sessionForUI.Variants(this.session.SelectedVariantsOrder,:);
+            % else
+            %     sessionForUI.Variants = table.empty;
+            % end
+
+            sessionForUI.Variants = this.getSelectedVariants();
 
             % Selected Doses
-            dosesFields = ["Active", "Name", "Type", "TargetName", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate"];
+            dosesFields = ["Active", "Name", "Type", "TargetName", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"];
             s = arrayfun(@(x)struct(x), this.session.SelectedDoses);
             fieldsToRemove = setdiff(fields(s), dosesFields);
             sessionForUI.Doses = rmfield(s, fieldsToRemove);
@@ -121,8 +148,8 @@ classdef controller < handle
             sessionForUI.TimeSettings = [this.session.StartTime, this.session.TimeStep, this.session.StopTime];
 
             % Selected parameters
-            sessionForUI.Parameters = arrayfun(@(x)struct(x), this.session.SelectedParams);
-            sessionForUI.Parameters = struct2table(sessionForUI.Parameters);
+            sessionForUI.Parameters = this.getParameters();
+            
 
             % PlotSpeciesTable
             sessionForUI.PlotSpeciesTable = cell2table(this.session.PlotSpeciesTable, 'VariableNames', ["PlotIndex", "StateName", "DisplayName"]);
@@ -169,7 +196,7 @@ classdef controller < handle
 
             % Dataset information
             sessionForUI.DataSet.Meta = struct(this.session.DatasetTable);
-            sessionForUI.DataSet.Meta.GroupColors = rgb2hex(this.session.GroupColors);
+            sessionForUI.DataSet.Meta.GroupColors = PKPD.controller.rgb2hex(this.session.GroupColors);
 
             % Maybe we don't send the entire dataset but only the time
             % courses of interest? How do we determine the state of
@@ -198,8 +225,19 @@ classdef controller < handle
             sessionForUI.DataFittingTask.PooledFitting = this.session.UsePooledFitting;
             sessionForUI.DataFittingTask.ErrorType = this.session.FitErrorModel;
 
+            % Preferences will be sent with the Model session for simplicity sake.
             % Recent Files List
-            sessionForUI.RecentFiles = getpref(this.PreferencesName, "RecentFiles");
+            % sessionForUI.Preferences.RecentFiles = getpref(this.PreferencesName, "RecentFiles");
+            if ispref(this.PreferencesName, 'FontName')
+                sessionForUI.Preferences.FontName = getpref(this.PreferencesName, 'FontName');
+            else
+                sessionForUI.Preferences.FontName = '';
+            end
+            % Supply all the available fonts.
+            % TODO: This should be done via a get
+            % method and an explicit call from the UI. but I want to
+            % prototype this quickly so use this mechanism.
+            %sessionForUI.Preferences.FontNames = string(listfonts);
 
             warning(warnState);
         end
@@ -209,19 +247,10 @@ classdef controller < handle
     % Utilities
     methods
         function loadCaseStudy(this, caseStudyNumber)
-            csPath = "/Users/pax/projects/gPKPDSim/Supp Info - 2nd Submission/";
+            csPath = fileparts(mfilename('fullpath')) + "/../CaseStudies/CaseStudy" + caseStudyNumber;
 
-            switch caseStudyNumber
-                case 1
-                    csPath = csPath + "1) Case Study 1";
-                case 2
-                    csPath = csPath + "2) Case Study 2";
-                case 3
-                    csPath = csPath + "3) Case Study 3";
-                case 4
-                    csPath = csPath + "4) Case Study 4";
-                otherwise
-                    error('No case study for index = %d', caseStudyNumber);
+            if ~exist(csPath, "dir")
+                error('No CaseStudy%d', caseStudyNumber);
             end
 
             this.loadProject(csPath);
@@ -264,7 +293,9 @@ classdef controller < handle
 
                     if ~inListTF
                         recentFiles = vertcat({char(newValue)}, recentFiles);
-                    else
+                    elseif numel(recentFiles) > 1
+                        % If there is more than one recentFiles sort the
+                        % newValue at the top.
                         recentFiles(currentIndex) = [];
                         recentFiles = vertcat(newValue, recentFiles);
                     end
@@ -281,11 +312,26 @@ classdef controller < handle
                     error("Preference name %s not found.", fieldName);
             end
         end
+
+        % Uses uiputfile to get a full path to a chosen filepath. It
+        % initializes uiputfile using the LastPath used preference and
+        % updates it if changed.
+        function fullFileName = getFilePathAndSavePreference(this, fileExtensionFilter)
+            % Start uiputfile from the LastPath
+            savedPath = getpref(this.PreferencesName, 'LastPath');
+            [fileName, pathName] = uiputfile(fileExtensionFilter, 'Save As ...', savedPath);
+
+            if ~strcmp(pathName, savedPath)
+                setpref(this.PreferencesName, 'LastPath', pathName);
+            end
+            fullFileName = fullfile(pathName, fileName);
+        end
     end
 
     % Actions on the server side
     methods(Access=public)
-        % Menu callback function.
+        % Run a task. Determines which task based on the current task
+        % selected in the frontend.
         function runTask(this, ~)
 
             [status, message] = this.session.run;
@@ -307,7 +353,7 @@ classdef controller < handle
         end
 
         % Load a project. This function also updates the RecentFiles
-        % preference and notifies the UI of the update those.
+        % preference and notifies the UI of the update.
         function loadProject(this, projectPath)
             arguments
                 this (1,1) PKPD.controller
@@ -397,10 +443,12 @@ classdef controller < handle
 
         function updatePlotOverlay(this, overlay)
             switch overlay.type
-                case 'simulationprofilenotes'
+                case 'SimulationProfileNotes'
                     this.session.FlagSimOverlay = overlay.plotOverlay;
-                case 'populationsimulationprofilenotes'
+                case 'PopulationSimulationProfileNotes'
                     this.session.FlagPopOverlay = overlay.plotOverlay;
+                case 'DataFittingProfileNotes'
+                    warning('DataFittingProfiles are not supported yet');
                 otherwise
                     error('Unknown overlay type %s', overlay.type);
             end
@@ -411,15 +459,10 @@ classdef controller < handle
         end
 
         function updateParameter(this, parameter)
-            % Will likely need to know which variant to edit. maybe there
-            % is only one.. There is a function called updateSimVariant in
-            % the Analysis class but it does not appear to do what we
-            % need. So do that here and then investigate.
-            idx = cellfun(@(x) x{2} == string(parameter.parameter), this.session.SimVariant.Content);
+            idx = arrayfun(@(x)strcmp(x.Name, parameter.parameter), this.session.SelectedParams);
             assert(sum(idx) == 1);
-            quad = this.session.SimVariant.Content{idx};
-            quad{4} = str2double(parameter.value);
-            this.session.SimVariant.Content{idx} = quad;
+            this.session.SelectedParams(idx).Value = str2double(parameter.value);
+            this.session.updateSimVariant();
         end
 
         function updatePlotScale(this, plotScale)
@@ -465,7 +508,7 @@ classdef controller < handle
                     this.session.PopSummaryData = PKPD.PopulationSummary.empty;
                 case 'DataFittingProfileNotes'
                     disp('needs to be done');
-            end            
+            end
         end
 
         function updatePopulationParameterCV(this, parameter)
@@ -480,9 +523,9 @@ classdef controller < handle
 
         function updatePlotShow(this, showPlot)
             switch showPlot.Task
-                case 'simulationprofilenotes'
+                case 'SimulationProfileNotes'
                     field = "SimProfileNotes";
-                case 'populationsimulationprofilenotes'
+                case 'PopulationSimulationProfileNotes'
                     field = "PopProfileNotes";
                 otherwise
                     error("Unknown task type: %s", showPlot.Task);
@@ -492,9 +535,9 @@ classdef controller < handle
 
         function updatePlotColor(this, newColor)
             switch newColor.Task
-                case 'simulationprofilenotes'
+                case 'SimulationProfileNotes'
                     field = "SimProfileNotes";
-                case 'populationsimulationprofilenotes'
+                case 'PopulationSimulationProfileNotes'
                     field = "PopProfileNotes";
                 otherwise
                     error("Unknown task type: %s", showPlot.Task);
@@ -523,7 +566,7 @@ classdef controller < handle
                     disp('Unhandled plotContent.type %s', plotContent.type);
             end
             % TODO: keep this for debugging.
-            this.session.PlotSpeciesTable
+            % this.session.PlotSpeciesTable
         end
 
         function updatePlotStyles(this, plotStyle)
@@ -535,7 +578,7 @@ classdef controller < handle
 
         function updatePlotExport(this, plotExport)
             switch plotExport.Task
-                case 'simulationprofilenotes'
+                case 'SimulationProfileNotes'
                     assert(plotExport.Run <= numel(this.session.SimProfileNotes));
                     this.session.SimProfileNotes(plotExport.Run).Export = plotExport.Export;
                 otherwise
@@ -545,38 +588,113 @@ classdef controller < handle
 
         function updateAllExport(this, exportToggle)
             switch exportToggle.task
-                case 'SimulationProfileNotes'                    
+                case 'SimulationProfileNotes'
                     array = this.session.SimProfileNotes;
-                case 'DataFittingProfileNotes'                    
+                case 'DataFittingProfileNotes'
                     error('This has no analog in the old version');
                 case 'PopulationSimulationProfileNotes'
                     array = this.session.PopProfileNotes;
+                otherwise
+                    error('Unknown task name %s', exportToggle.task);
             end
             arrayfun(@(x)setfield(x, 'Export', exportToggle.export), array);
         end
 
         function updateRunDescription(this, runDescription)
             switch runDescription.Task
-                case 'simulationprofilenotes'
+                case 'SimulationProfileNotes'
                     this.session.SimProfileNotes(runDescription.Run).Description = runDescription.Description;
+                case 'PopulationSimulationProfileNotes'
+                    this.session.PopProfileNotes(runDescription.Run).Description = runDescription.Description;
+                case 'DataFittingProfileNotes'
+                    warning('DataFittingProfileNotes not finished yet.')
                 otherwise
                     error('unhandled case %s', runDescription.Task);
             end
         end
-        
+
         function updateVariantActive(this, activeVariant)
             variantNames = string({this.session.SelectedVariants.Name});
             idx = variantNames == activeVariant.name;
             assert(sum(idx) == 1);
-            this.session.SelectedVariants(idx).Active = activeVariant.active;            
+            this.session.SelectedVariants(idx).Active = activeVariant.active;
+
+            % Now we update the M(odel) state to reflect the new state of
+            % applied variants. In addition to the active variants we
+            % update the SelectedParams and the SimVariant. This is done
+            % with the updateRestoreParameters. That function is used to
+            % restore the parameter table to model defaults + applied
+            % variants. 
+            this.updateRestoreParameters();
         end
-    
+
+        function updateSavedVariants(this, ~)
+            % Make up a new name for the new variant.
+            existingNames = arrayfun(@(x)string(x.Name), this.session.SelectedVariants);
+            if ~isempty(existingNames)
+                numberUnnamedVariants = sum(existingNames.startsWith("Unnamed"));
+                newName = "Unnamed" + (numberUnnamedVariants + 1);
+            else
+                newName = "Unnamed";
+            end
+            this.session.saveVariant(char(newName));
+            this.notifyUI("updateSelectedVariants");
+        end
+
         function updatePooledFitting(this, pooledFitting)
             this.session.UsePooledFitting = pooledFitting.pooledFitting;
         end
-        
+
         function updateErrorType(this, errorModel)
             this.session.FitErrorModel = errorModel.errorType;
+        end
+
+        function updateRestoreParameters(this, ~)
+            % this should probably not do the work but call the Model (MVC)
+            % to do this work. But lets not change the M(odel) now.
+
+            % SelectedParams is updated with the model value + applied variants
+            OrderedVariants = this.session.SelectedVariants;
+            OrderedVariants(this.session.SelectedVariantsOrder) = this.session.SelectedVariants;
+            IsSelected = get(OrderedVariants,'Active');
+            if iscell(IsSelected)
+                IsSelected = cell2mat(IsSelected);
+            end
+            OrderedVariants = OrderedVariants(IsSelected);
+
+            for index = 1:numel(this.session.SelectedParams)
+                restoreValueFromVariant(this.session.SelectedParams(index), this.session.ModelObj, OrderedVariants);
+            end
+
+            % Apply parameters to simulation variant
+            this.session.updateSimVariant();
+
+            % Tell the UI we changed the parameters
+            this.notifyUI("updateParameters");
+        end
+    
+        function updateVariantNameOrTag(this, variant)
+            idx = arrayfun(@(x)strcmp(x.(variant.property), variant.oldValue), this.session.SelectedVariants);
+            assert(sum(idx) == 1);
+            this.session.SelectedVariants(idx).(variant.property) = variant.newValue;
+            this.session.SelectedVariants
+        end
+
+        function updateVariantOrder(this, variantOrder)
+            % Enhancement. Rather than hold on to the Variants, their
+            % Names, and the order in different properties of session we
+            % should just have the variants themselves and order them the
+            % way we want.
+            newOrder = string({variantOrder.rows.Name});
+            currentOrder = string(this.session.SelectedVariantNames);
+            currentOrder = currentOrder(this.session.SelectedVariantsOrder);
+            
+            idx = zeros(numel(newOrder), 1);
+            for i=1:numel(newOrder)
+                idx(i) = find(newOrder(i) == currentOrder);
+            end
+
+            this.session.SelectedVariantsOrder = idx;            
         end
     end
 
@@ -595,14 +713,77 @@ classdef controller < handle
             this.runTask(task);
         end
 
+        function menuExportSimToExcel(this, ~)
+            Spec =  {'*.xlsx;*.xls','Excel'};
+            fullFileName = this.getFilePathAndSavePreference(Spec);
+            [StatusOK,Message] = export(this.session, fullFileName, 'Simulation');
+            if ~StatusOK
+                error('Unhandled error. Need to send this to the frontend. %s', Message);
+            end
+        end
+
+        function menuExportDataFittingToExcel(this, ~)
+            Spec =  {'*.xlsx;*.xls','Excel'};
+            fullFileName = this.getFilePathAndSavePreference(Spec);
+            [StatusOK,Message] = export(this.session, fullFileName, 'Fitting');
+            if ~StatusOK
+                error('Unhandled error. Need to send this to the frontend. %s', Message);
+            end
+        end
+
+        function menuExportDataFittingToPDF(this, ~)
+            warning('Data fitting summary export to PDF is currently disabled');
+            return
+            Spec = {'*.pdf','PDF';'*.xlsx;*.xls','Excel'};
+
+            fullFileName = this.getFilePathAndSavePreference(Spec);
+            % TODO: this is disabled for now.
+            % [StatusOK,Message] = export(this.session, fullFileName, 'FittingSummary');
+            if ~StatusOK
+                error('Unhandled error. Need to send this to the frontend. %s', Message);
+            end
+        end
+
+        function menuExportPopulationSimulationToExcel(this, ~)
+            Spec =  {'*.xlsx;*.xls','Excel'};
+            fullFileName = this.getFilePathAndSavePreference(Spec);
+            [StatusOK,Message] = export(this.session, fullFileName, 'Population');
+            if ~StatusOK
+                error('Unhandled error. Need to send this to the frontend. %s', Message);
+            end
+        end
+
+        function menuExportNCAToExcel(this, ~)
+            warning('NCA export is currently disabled');
+            return
+            Spec =  {'*.xlsx;*.xls','Excel'};
+            fullFileName = this.getFilePathAndSavePreference(Spec);
+            [StatusOK,Message] = export(this.session, fullFileName, 'NCA');
+            if ~StatusOK
+                error('Unhandled error. Need to send this to the frontend. %s', Message);
+            end
+        end
+
         function menuAbout(this, ~)
             Name = "gPKPDSim";
             Logo = [];
-            SupportInfo = "foobar";
+            SupportInfo = "";
 
             % Reuse the old about dialog. Probably should update to
             % something more modern.
             UIUtilities.AboutDialog(Name, this.Version, this.RevisionDate, Logo, SupportInfo);
+        end
+
+        function menuDocumentation(this, ~)
+            % TODO, need to make sure this is on the path
+            web('gPKPDSimUserGuide.html');
+        end
+        
+        function menuImportDataset(this, ~)
+            % TODO, add filter and title and multi-select should be off
+            [file, location] = uigetfile;
+            
+            disp('adf');
         end
     end
 
@@ -613,10 +794,11 @@ classdef controller < handle
             if ~isempty(this.session.SimProfileNotes)
                 simProfileNotes = arrayfun(@(x)struct(x), this.session.SimProfileNotes);
                 simulationResults = struct2table(simProfileNotes, "AsArray", true);
-                simulationResults.Color = rgb2hex(simulationResults.Color);
+                simulationResults.Color = PKPD.controller.rgb2hex(simulationResults.Color);
                 simulationResults.Run = (1:height(simulationResults))';
                 simulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), simulationResults.ParametersTable, UniformOutput=false);
-                simulationResults.DosingTable = cell2table(simulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
+                % TODO: there is a bug here.
+                % simulationResults.DosingTable = cell2table(simulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
                 simulationResults.DosingTable = [];
 
                 % Send only the data that is being selected now. More data will
@@ -638,12 +820,17 @@ classdef controller < handle
             if ~isempty(this.session.PopProfileNotes)
                 populationProfileNotes = arrayfun(@(x)struct(x), this.session.PopProfileNotes);
                 populationSimulationResults = struct2table(populationProfileNotes, AsArray=true);
-                populationSimulationResults.Color = rgb2hex(populationSimulationResults.Color);
+                populationSimulationResults.Color = PKPD.controller.rgb2hex(populationSimulationResults.Color);
 
                 populationSimulationResults.Run = (1:height(populationSimulationResults))';
                 populationSimulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), populationSimulationResults.ParametersTable, UniformOutput=false);
-                populationSimulationResults.DosingTable = cell2table(populationSimulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
+                % TODO: there is a bug here.
+                %populationSimulationResults.DosingTable = cell2table(populationSimulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
+                populationSimulationResults.DosingTable = [];
 
+                % Test that this works.
+                %popSimData = repmat(struct('DataNames', [], 'Time', [], 'P5', [], 'P50', [], 'P95', []), size(this.session.PopSummaryData, 1), 1);
+                
                 for i = 1:size(this.session.PopSummaryData, 1)
                     thisRun = this.session.PopSummaryData(i,:);
                     popSimData(i).DataNames = string({thisRun.Name});
@@ -657,34 +844,119 @@ classdef controller < handle
                 populationSimulationResults = [];
             end
         end
-    
+        
         function dataFittingResults = getDataFittingResults(this)
             if ~isempty(this.session.FitResults)
                 dataFittingProfileNotes = arrayfun(@(x)struct(x), this.session.FitResults);
                 fieldsToKeep = ["MSE", "SSE", "LogLikelihood", "AIC", "BIC", "DFE", "FitType"];
                 dataFittingProfileNotes = rmfield(dataFittingProfileNotes, setdiff(fields(dataFittingProfileNotes), fieldsToKeep));
                 dataFittingResults = struct2table(dataFittingProfileNotes, "AsArray", true);
-                
+
                 % We only support having one datafitting results.
                 assert(height(dataFittingResults) == 1);
 
                 dataFittingResults.Run = (1:height(dataFittingResults))';
-                dataFittingResults.Show = true;                
-                
+                dataFittingResults.Show = true;
+
                 % Since we only support one DataFittingResults, all the
-                % simdatas in FitSimData are 
+                % simdatas in FitSimData are
                 fitSimData = this.session.FitSimData;
                 fitSimData = struct(fitSimData);
                 fieldsToKeep = ["Data", "DataNames", "Time"];
                 fitSimData = rmfield(fitSimData, setdiff(fields(fitSimData), fieldsToKeep));
                 for i = 1:numel(fitSimData)
                     fitSimData(i).Data = fitSimData(i).Data';
-                    fitSimData(i).Color = rgb2hex(this.session.GroupColors(i,:));
+                    fitSimData(i).Color = PKPD.controller.rgb2hex(this.session.GroupColors(i,:));
                     fitSimData(i).Group = i;
                 end
                 dataFittingResults.Data = fitSimData';
             else
                 dataFittingResults = [];
+            end
+        end
+        
+        function parameters = getParameters(this)
+            parameters = arrayfun(@(x)struct(x), this.session.SelectedParams);
+            parameters = struct2table(parameters);
+        end
+
+        function variants = getSelectedVariants(this)
+            % Sort the names using the VariantOrder and supply
+            % the UI the variants in order.
+            if ~isempty(this.session.SelectedVariants)
+                variants = this.session.SelectedVariants;
+                variants = table([variants.Active]', string({variants.Name})', string({variants.Tag})', 'VariableNames', ["Active", "Name", "Tag"]);
+                variants = variants(this.session.SelectedVariantsOrder,:);
+            else
+                variants = table.empty;
+            end
+        end
+    end
+
+    methods(Static)
+        % This function is here to make gPKPDSim work on older versions of
+        % MATLAB that did not have this function. rgb2hex was introduced in
+        % R2024a. If we are running in a release < 24a use this otherwise
+        % use the official MATLAB version.
+        function hex = rgb2hex(rgb, opts)
+            %
+            %   Copyright 2024 The MathWorks, Inc.
+
+            arguments
+                rgb {mustBeA(rgb,["double","single","uint8","uint16"]), mustBeNonnegative}
+                opts.Shorthand (1,1) logical
+            end
+
+            if ~isMATLABReleaseOlderThan("R2024a")
+                hex = rgb2hex(rgb);
+                return
+            end
+
+            rgbType = class(rgb);
+            sz = size(rgb);
+
+            % Validate RGB shape and reshape MxNx3 to a vector of RGB triplets.
+            if sz(end) ~= 3 && ~isequal(sz,[0 0])
+                error(message('MATLAB:graphics:validatecolor:InvalidRGBMatrixShape'))
+            end
+
+            % Change to a vector of rgb triplets.
+            rgb = reshape(rgb,[],3);
+
+            if ~isempty(rgb) && ismember(rgbType, {'double' 'single'}) && (max(rgb,[],"all") > 1)
+                error(message('MATLAB:graphics:validatecolor:OutOfRange'));
+            end
+
+            % Scale values to be on the [0,255] range.
+            if ismember(rgbType, {'double', 'single'})
+                rgb = round(rgb * 255);
+            elseif isequal(rgbType, 'uint16')
+                scale = 255 / 65535;
+                rgb = rgb * scale;
+            end
+
+            % Determine whether to use shorthand 3-digit representation or standard 6-digit.
+            % Convert to hexadecimal representation.
+            if isfield(opts, 'Shorthand') && opts.Shorthand
+                % Shorthand represents multiples of '#11', which is 17 in decimal.
+                % Divide each rgb value by 17 and round to the closes multiple of 17.
+                % dec2hex to convert each scaled rgb value to its corresponding 1-digit
+                % hex value. reshape each triple of hex values to a 3-digit hex value.
+                hex(:,2:4) = reshape(dec2hex(round(rgb/17)')', 3, [])';
+            else
+                % dec2hex to convert each rgb value to its corresponding 2-digit hex
+                % value. reshape each triplet of hex values to a 6-digit hex value.
+                hex(:,2:7) = reshape(dec2hex(rgb',2)', 6, [])';
+            end
+            hex(:,1) = '#';
+            if ~isempty(hex)
+                hex = string(cellstr(hex));
+            else
+                hex = strings(0); % Create an empty string to prevent the empty char from becoming "".
+            end
+            if numel(sz) > 2
+                % For NDx3, change back to an ND matrix of hex codes.
+                hex = reshape(hex, sz(1:end-1));
             end
         end
     end
