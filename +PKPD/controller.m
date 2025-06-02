@@ -1,6 +1,6 @@
 classdef controller < handle
     properties(Constant)
-        Version = 2.0
+        Version = "2"
         PreferencesName = "PKPDViewer_AnalysisApp";
         Debug = false;
     end
@@ -11,8 +11,7 @@ classdef controller < handle
         projectName (1,1) string
         session PKPD.Analysis = PKPD.Analysis.empty        
         RevisionDate = datetime("now");
-        FrontendSHA (1,1) string
-        BackendSHA (1,1) string
+        SessionDirtyState (1,1) logical = false
     end
 
     methods
@@ -22,15 +21,16 @@ classdef controller < handle
             end
             this.app = app;
 
-            % This may not be needed
-            [~, this.FrontendSHA] = system('git -C /Users/pax/projects/gPKPDSimUI rev-parse HEAD');
-            [~, this.BackendSHA] = system('git -C /Users/pax/projects/gPKPDSim rev-parse HEAD');
-            this.FrontendSHA = strip(this.FrontendSHA);
-            this.BackendSHA = strip(this.BackendSHA);
+            % Setup preferences.
+            this.setupPreferences();
 
-            % hack for now to initialize preferences
-            if ~ispref(this.PreferencesName)
-                setpref(this.PreferencesName, 'RecentFiles', {});
+            % Configure the window with custom settings.
+            if ~isempty(this.app)
+                position = getpref(this.PreferencesName, 'Position');
+                this.app.gPKPDSimUIFigure.Position = position;
+                this.app.HTML.Position = [1 1 position(3) position(4)];
+                this.app.gPKPDSimUIFigure.CloseRequestFcn = @(s,e)this.closeApp;
+                this.app.gPKPDSimUIFigure.Name = "gPKPDSim " + this.Version;
             end
         end
 
@@ -52,6 +52,11 @@ classdef controller < handle
                 end
                 
                 this.(eventName)(e);
+
+                % Any calls from the UI for update methods
+                if eventName.startsWith("update")
+                    this.SessionDirtyState = true;
+                end
             catch p
                 fprintf('Error calling the %s method. %s\n', eventName, p.message);
             end
@@ -91,6 +96,15 @@ classdef controller < handle
                     case "updateSelectedVariants"
                         message = this.getSelectedVariants();
 
+                    case "updateDataset"
+                        message = this.getDataset();
+
+                    case "updateDataFittingResponseMap"
+                        message = this.getDataFittingResponseMap();
+
+                    case "updateDataFittingDoseMap"
+                        message = this.getDataFittingDoseMap();
+
                     otherwise
                         fprintf("Unhandled event: %s\n", eventName);
                 end
@@ -126,16 +140,6 @@ classdef controller < handle
             % Transformations on data to simplify the communication.
 
             % Selected Variants.
-            % % Sort the names using the VariantOrder and supply
-            % % the UI the variants in order.
-            % if ~isempty(this.session.SelectedVariants)
-            %     variants = this.session.SelectedVariants;
-            %     sessionForUI.Variants = table([variants.Active]', string({variants.Name})', string({variants.Tag})', 'VariableNames', ["Active", "Name", "Tag"]);
-            %     sessionForUI.Variants = sessionForUI.Variants(this.session.SelectedVariantsOrder,:);
-            % else
-            %     sessionForUI.Variants = table.empty;
-            % end
-
             sessionForUI.Variants = this.getSelectedVariants();
 
             % Selected Doses
@@ -195,31 +199,12 @@ classdef controller < handle
             sessionForUI.DataFittingProfileNotes = this.getDataFittingResults();
 
             % Dataset information
-            sessionForUI.DataSet.Meta = struct(this.session.DatasetTable);
-            sessionForUI.DataSet.Meta.GroupColors = PKPD.controller.rgb2hex(this.session.GroupColors);
-
-            % Maybe we don't send the entire dataset but only the time
-            % courses of interest? How do we determine the state of
-            % interest?
-            if isa(this.session.DataToFit, 'dataset')
-                sessionForUI.DataSet.Data = dataset2table(this.session.DataToFit);
-            else
-                sessionForUI.DataSet.Data = this.session.DataToFit;
-            end
-
-            % Send the time-course split by group.
-            groupLabel = sessionForUI.DataSet.Meta.Group;
-            if ~isempty(groupLabel)
-                groups = unique(sessionForUI.DataSet.Data.(sessionForUI.DataSet.Meta.Group));
-                for i = 1:numel(groups)
-                    group_i_tf = sessionForUI.DataSet.Data.(groupLabel) == i;
-                    sessionForUI.DataSet.GroupData{i} = sessionForUI.DataSet.Data(group_i_tf,:);
-                end
-            end
+            sessionForUI.DataSet = this.getDataset();
 
             % DataFitting Task
-            sessionForUI.DataFittingTask.ResponseMap = cell2table(this.session.ResponseMap, 'VariableNames', ["DataName", "ModelComponentName"]);
-            sessionForUI.DataFittingTask.DoseMap = cell2table(this.session.DoseMap, 'VariableNames', ["DataName", "DoseTarget"]);
+            sessionForUI.DataFittingTask.ResponseMap = this.getDataFittingResponseMap();
+            sessionForUI.DataFittingTask.DoseMap = this.getDataFittingDoseMap();
+
             sessionForUI.DataFittingTask.DatasetHeaders = this.session.DatasetTable.Headers;
             sessionForUI.DataFittingTask.TargetSpecies = string({this.session.SelectedSpecies.partiallyQualifiedName});
             sessionForUI.DataFittingTask.PooledFitting = this.session.UsePooledFitting;
@@ -227,12 +212,12 @@ classdef controller < handle
 
             % Preferences will be sent with the Model session for simplicity sake.
             % Recent Files List
-            % sessionForUI.Preferences.RecentFiles = getpref(this.PreferencesName, "RecentFiles");
-            if ispref(this.PreferencesName, 'FontName')
-                sessionForUI.Preferences.FontName = getpref(this.PreferencesName, 'FontName');
-            else
-                sessionForUI.Preferences.FontName = '';
-            end
+            sessionForUI.Preferences.RecentFiles = getpref(this.PreferencesName, "RecentFiles");
+            % if ispref(this.PreferencesName, 'FontName')
+            %     sessionForUI.Preferences.FontName = getpref(this.PreferencesName, 'FontName');
+            % else
+            %     sessionForUI.Preferences.FontName = '';
+            % end
             % Supply all the available fonts.
             % TODO: This should be done via a get
             % method and an explicit call from the UI. but I want to
@@ -241,7 +226,6 @@ classdef controller < handle
 
             warning(warnState);
         end
-
     end
 
     % Utilities
@@ -249,11 +233,27 @@ classdef controller < handle
         function loadCaseStudy(this, caseStudyNumber)
             csPath = fileparts(mfilename('fullpath')) + "/../CaseStudies/CaseStudy" + caseStudyNumber;
 
-            if ~exist(csPath, "dir")
+            % Use the filenames for the _final.mat in each case. 
+            switch caseStudyNumber
+                case 1
+                    filename = 'casestudy1_TwoCompPK_final.mat';
+                case 2
+                    filename = 'casestudy2_TMDD_final.mat';
+                case 3
+                    filename = 'casestudy3_IDR_TwoCompPK_final.mat';
+                case 4
+                    filename = 'casestudy4_minPBPK_final.mat';                    
+                otherwise
+                    warning('Unknown case study number %d', caseStudyNumber);
+            end
+
+            fullPathName = csPath + "/" + filename;
+            
+            if ~exist(fullPathName, "file")
                 error('No CaseStudy%d', caseStudyNumber);
             end
 
-            this.loadProject(csPath);
+            this.loadProject(fullPathName);
         end
 
         function jsonsession = trimmedToJSON(this)
@@ -321,14 +321,83 @@ classdef controller < handle
             savedPath = getpref(this.PreferencesName, 'LastPath');
             [fileName, pathName] = uiputfile(fileExtensionFilter, 'Save As ...', savedPath);
 
-            if ~strcmp(pathName, savedPath)
-                setpref(this.PreferencesName, 'LastPath', pathName);
+            if ischar(fileName) && ischar(pathName)
+                if ~strcmp(pathName, savedPath)
+                    setpref(this.PreferencesName, 'LastPath', pathName);
+                end
+                fullFileName = fullfile(pathName, fileName);
+            else
+                % User likely called cancel.
+                fullFileName = '';
             end
-            fullFileName = fullfile(pathName, fileName);
+        end
+    
+        function set.SessionDirtyState(this, state)
+            if this.SessionDirtyState ~= state
+                this.SessionDirtyState = state;
+                this.setFigureName();
+            end
+        end
+
+        function setFigureName(this)
+            if ~isempty(this.app)
+                if this.SessionDirtyState
+                    this.app.gPKPDSimUIFigure.Name = this.app.gPKPDSimUIFigure.Name + " *";
+                else
+                    currentName = string(this.app.gPKPDSimUIFigure.Name);
+                    this.app.gPKPDSimUIFigure.Name = currentName.strip("right", "*").strip;
+                end
+            end
+        end
+
+        function closeApp(this)
+            % This will be called when the app's uifigure is being closed.
+            % Now is the time to store the position in our preferences.
+            assert(~isempty(this.app));
+            currentWindowPosition = this.app.gPKPDSimUIFigure.Position;
+            setpref(this.PreferencesName, 'Position', currentWindowPosition);            
+            
+            % If all worked ok then delete the app. This will delete
+            % everything.
+            delete(this.app);
+        end
+        
+        function setupPreferences(this)
+            % If we don't have Preferences setup yet then use some defaults
+            % to initialize them.
+            defaultValues = dictionary;
+            defaultValues("LastPath") = {pwd};
+            defaultValues("DataPath") = {pwd};
+            defaultValues("Position") = {[50 100 1500 1000]};
+            defaultValues("RecentFiles") = {{}};
+
+            if ~ispref(this.PreferencesName)
+                expectedFields = defaultValues.keys;
+                for i = 1:numel(expectedFields)
+                    field_i = expectedFields(i);
+                    value = defaultValues(field_i);
+                    setpref(this.PreferencesName, field_i, value{1});
+                end
+            else
+                % Make sure we have all the fields
+                expectedFields = defaultValues.keys.sort;
+                preferenceFields = string(fields(getpref('PKPDViewer_AnalysisApp'))).sort;
+                match = expectedFields.matches(preferenceFields);
+
+                if ~all(match)
+                    % some fields are missing
+                    idx = find(match == 0);
+                    for i = 1:numel(idx)
+                        field_i = expectedFields(idx(i));
+                        value = defaultValues(field_i);
+                        setpref(this.PreferencesName, field_i, value{1});
+                    end
+                end
+            end
         end
     end
 
-    % Actions on the server side
+    % Server-side actions
     methods(Access=public)
         % Run a task. Determines which task based on the current task
         % selected in the frontend.
@@ -360,34 +429,13 @@ classdef controller < handle
                 projectPath (1,1) string
             end
 
-            if isfolder(projectPath)
-                matFile = string(what(projectPath).mat);
-                if numel(matFile) > 1
-                    % Assume there is a template mat file. Open the other
-                    % one.
-                    selectOneTF = ~matFile.contains("_template");
-                    assert(sum(selectOneTF) == 1);
-                    matFile = matFile(selectOneTF);
-                end
-                sessionContainer = load(matFile);
-
-                % See if there is an sbproj file.
-                % TODO: Might want to investigate
-                % how gPKPDSim is loading the mat file to see if there is a
-                % more robust way to get the name of the sbproj.
-                dirListing = dir(projectPath);
-                fileNames = string({dirListing.name});
-                sbprojFileNameTF = fileNames.contains(".sbproj");
-                assert(sum(sbprojFileNameTF) == 1);
-                this.projectName = fileNames(sbprojFileNameTF);
+            [~, name, ext] = fileparts(projectPath);
+            if ext == ".mat"
+                sessionContainer = load(projectPath);
             else
-                [~, ~, ext] = fileparts(projectPath);
-                if ext == ".mat"
-                    sessionContainer = load(projectPath);
-                else
-                    error("not a MAT file");
-                end
+                error("Select a MAT file");
             end
+            this.projectName = name;
 
             f = string(fields(sessionContainer));
             assert(isscalar(f));
@@ -410,15 +458,32 @@ classdef controller < handle
 
             this.notifyUI("LoadProject");
 
+            this.SessionDirtyState = false;
+
             % Save the recentFiles change in the preferences.
             if ~isempty(this.app)
                 this.saveUserPreference("RecentFiles", projectPath);
             end
         end
+
+        function saveProject(this, fullFilePathName)
+
+            if exist(fullFilePathName, "file")
+                [status, attribs] = fileattrib(fullFilePathName);
+                if ~status
+                    error('Could not get file attributes for %s', fullFilePathName);
+                elseif ~attribs.UserWrite
+                    error('File %s is read-only', fullFilePathName);
+                end          
+            end
+
+            Analysis = this.session;
+            save(fullFilePathName, "Analysis");
+            this.SessionDirtyState = false;
+        end
     end
 
-    % These methods all start with the prefix "update" and are the
-    % functions called from the UI to update the Model.
+    % These methods update the M(odel).
     methods(Access=private)
         function updateTimeSettings(this, timeSettings)
             this.session.StartTime = timeSettings(1);
@@ -562,11 +627,21 @@ classdef controller < handle
                     else
                         this.session.PlotSpeciesTable{idx,1} = '';
                     end
+                case 'dataset'
+                    dataName = string(this.session.PlotDatasetTable(:,2));
+                    idx = dataName == plotContent.content;
+                    if addTF
+                        this.session.PlotDatasetTable{idx,1} = num2str(plotContent.plotIndex);
+                    else
+                        this.session.PlotDatasetTable{idx,1} = '';
+                    end
+
                 otherwise
                     disp('Unhandled plotContent.type %s', plotContent.type);
             end
             % TODO: keep this for debugging.
             % this.session.PlotSpeciesTable
+            % this.session.PlotDatasetTable
         end
 
         function updatePlotStyles(this, plotStyle)
@@ -654,8 +729,7 @@ classdef controller < handle
             % to do this work. But lets not change the M(odel) now.
 
             % SelectedParams is updated with the model value + applied variants
-            OrderedVariants = this.session.SelectedVariants;
-            OrderedVariants(this.session.SelectedVariantsOrder) = this.session.SelectedVariants;
+            OrderedVariants = this.session.SelectedVariants(this.session.SelectedVariantsOrder);            
             IsSelected = get(OrderedVariants,'Active');
             if iscell(IsSelected)
                 IsSelected = cell2mat(IsSelected);
@@ -677,36 +751,110 @@ classdef controller < handle
             idx = arrayfun(@(x)strcmp(x.(variant.property), variant.oldValue), this.session.SelectedVariants);
             assert(sum(idx) == 1);
             this.session.SelectedVariants(idx).(variant.property) = variant.newValue;
-            this.session.SelectedVariants
+            this.session.SelectedVariantNames = {this.session.SelectedVariants.Name};
         end
 
         function updateVariantOrder(this, variantOrder)
+
+            % TODO: Keep these comments for debugging.
+            % fprintf('Requesting order:\t')
+            % fprintf('%s ', variantOrder.rows.Name);
+            % fprintf('\n');
+            % 
+            % % selectedVariants and selectedVariantNames should not be
+            % % changing
+            % fprintf('SelectedVariantNames\t');
+            % fprintf('%s ', string(this.session.SelectedVariantNames));
+            % fprintf('\n');
+            % 
+            % fprintf('SelectedVariants\t');
+            % fprintf('%s ', string({this.session.SelectedVariants.Name}));
+            % fprintf('\n');
+            % fprintf('\n');
+
             % Enhancement. Rather than hold on to the Variants, their
             % Names, and the order in different properties of session we
             % should just have the variants themselves and order them the
-            % way we want.
+            % way we want. The old app kept the variant order fixed and
+            % users specified a vector with the order they wanted;
+            % SelectedVariants and SelectedVariantNames were never
+            % reordered while SelectedVariantsOrder is used as an index
+            % into those vectors. We'd like to keep both apps working so
+            % lets keep this strategy.
             newOrder = string({variantOrder.rows.Name});
-            currentOrder = string(this.session.SelectedVariantNames);
-            currentOrder = currentOrder(this.session.SelectedVariantsOrder);
+            origianlOrder = string(this.session.SelectedVariantNames);
             
+            % Find the order that puts the original order into the new
+            % order.
             idx = zeros(numel(newOrder), 1);
             for i=1:numel(newOrder)
-                idx(i) = find(newOrder(i) == currentOrder);
+                idx(i) = find(newOrder(i) == origianlOrder);
             end
 
-            this.session.SelectedVariantsOrder = idx;            
+            % fprintf('Calculated order:\t')
+            % fprintf('%d ', idx);
+            % fprintf('\n');
+
+            this.session.SelectedVariantsOrder = idx;
+
+            % fprintf('%s ', this.session.SelectedVariants(this.session.SelectedVariantsOrder).Name);
+            % fprintf('\n');
+
+            % Now we update the M(odel) state to reflect the new state of
+            % applied variants. In addition to the active variants we
+            % update the SelectedParams and the SimVariant. This is done
+            % with the updateRestoreParameters. That function is used to
+            % restore the parameter table to model defaults + applied
+            % variants.
+            this.updateRestoreParameters();
+
+            % fprintf('%s ', this.session.SelectedVariants(this.session.SelectedVariantsOrder).Name);
+            % fprintf('\n');
+            % fprintf('\n');
+            % fprintf('\n');
+        end
+        
+        function updateDataFittingResponseMap(this, responseMap)
+            this.session.ResponseMap = {responseMap.ResponseMap.DataName, responseMap.ResponseMap.ModelComponentName};
+            this.notifyUI('updateDataFittingResponseMap');
+        end
+
+        function updateDataFittingDoseMap(this, doseMap)
+            this.session.DoseMap = {doseMap.DoseMap.DataName, doseMap.DoseMap.DoseTarget};
+            this.notifyUI('updateDataFittingDoseMap');
         end
     end
 
     % Menu item callbacks.
-    methods(Access=private)
-        function menuOpenSession(this, projectPath)
+    % methods(Access=private)
+    methods
+        function menuOpenSession(this, projectPath)                        
             if isempty(projectPath)
-                selectedDir = uigetdir;
+                lastPath = getpref(this.PreferencesName, 'LastPath');
+                [fileName, location] = uigetfile({'*.mat'}, "Open", lastPath);
+                if ischar(fileName) && ischar(location)
+                    if ~strcmp(lastPath, location)
+                        setpref(this.PreferencesName, 'LastPath', location);
+                    end
+                    selectedDirOrFile = [location, fileName];
+                else
+                    % User likely cancelled the open dialog.
+                    return
+                end
             else
-                selectedDir = projectPath.sessionData;
+                % This came from the UI with a recent file name.
+                selectedDirOrFile = projectPath.sessionData;
+                if ~isfile(selectedDirOrFile)
+                    warning('Must provide a filename');
+                    return
+                end
             end
-            this.loadProject(selectedDir);
+            
+            this.loadProject(selectedDirOrFile);
+        end
+
+        function menuOpenCaseStudy(this, caseStudyNumber)
+            this.loadCaseStudy(caseStudyNumber);
         end
 
         function menuRun(this, task)
@@ -775,15 +923,51 @@ classdef controller < handle
         end
 
         function menuDocumentation(this, ~)
-            % TODO, need to make sure this is on the path
+            % TODO, need to make sure this is on the path after
+            % installation.
             web('gPKPDSimUserGuide.html');
         end
-        
+
         function menuImportDataset(this, ~)
-            % TODO, add filter and title and multi-select should be off
-            [file, location] = uigetfile;
+            Spec = {'*.xlsx;*.xls'};
+            Title = 'Open Dataset';
+            DataPath = getpref(this.PreferencesName, 'DataPath');
+            [FileName, PathName] = uigetfile(Spec,Title,DataPath);
+            FilePath = fullfile(PathName,FileName);
+
+            % Don't store paths on the session object.         
+            this.session.DatasetTable.FilePath = FilePath;
+
+            [~,~,Raw] = xlsread(FilePath);
+            if ~isempty(Raw)
+                Headers = Raw(1,:);
+            else
+                Headers = {};
+            end
+            this.session.DatasetTable.Headers = Headers;
+
+            % Automatically update the name
+            [~,Name] = fileparts(FileName);
+            this.session.DatasetTable.Name = Name;
             
-            disp('adf');
+            % Reuse as much as possible of old code to avoid datatype
+            % issues loading sessions (aka PKPD.Analysis objects).
+            this.session.importData(this.session.DatasetTable, false); %NCA is false
+
+            setpref(this.PreferencesName, 'DataPath', PathName);
+            this.notifyUI('updateDataset');
+        end
+        
+        function menuSave(this, ~)
+            this.saveProject(this.projectPath);            
+        end
+
+        function menuSaveAs(this, ~)
+            fullFileName = this.getFilePathAndSavePreference({'*.mat'});
+            
+            if ~isempty(fullFileName)
+                this.saveProject(fullFileName);
+            end
         end
     end
 
@@ -890,6 +1074,35 @@ classdef controller < handle
             else
                 variants = table.empty;
             end
+        end
+        
+        function dataSet = getDataset(this)
+            dataSet.Meta = struct(this.session.DatasetTable);
+            dataSet.Meta.GroupColors = PKPD.controller.rgb2hex(this.session.GroupColors);
+
+            if isa(this.session.DataToFit, 'dataset')
+                dataSet.Data = dataset2table(this.session.DataToFit);
+            else
+                dataSet.Data = this.session.DataToFit;
+            end
+
+            % Send the time-course split by group.
+            groupLabel = dataSet.Meta.Group;
+            if ~isempty(groupLabel)
+                groups = unique(dataSet.Data.(dataSet.Meta.Group));
+                for i = 1:numel(groups)
+                    group_i_tf = dataSet.Data.(groupLabel) == i;
+                    dataSet.GroupData{i} = dataSet.Data(group_i_tf,:);
+                end
+            end
+        end
+
+        function responseMap = getDataFittingResponseMap(this)
+            responseMap = cell2table(this.session.ResponseMap, 'VariableNames', ["DataName", "ModelComponentName"]);
+        end
+
+        function doseMap = getDataFittingDoseMap(this)
+            doseMap = cell2table(this.session.DoseMap, 'VariableNames', ["DataName", "DoseTarget"]);
         end
     end
 
