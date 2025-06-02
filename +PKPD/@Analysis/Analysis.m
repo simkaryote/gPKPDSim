@@ -401,10 +401,12 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
             obj.PlotDatasetTable(:,2) = SelectedFields;
             obj.PlotDatasetTable(:,3) = SelectedFields;
             
-            % Update groupcolors            
-            updateGroupColors(obj);
+            % Update groupcolors 
+            if numel(obj.DatasetTable.Group) > 0
+                updateGroupColors(obj);
+            end
             
-            if ~isempty(obj.DataToFit)
+            if ~isempty(obj.DataToFit) && ~isempty(DatasetTable.Group)
                 UniqueGroups = unique(categorical(obj.DataToFit.(DatasetTable.Group)),'stable');
                 obj.PlotGroupNames = cellfun(@(x)char(x),num2cell(UniqueGroups(:)),'UniformOutput',false);
                 obj.SelectedGroups = true(1,numel(obj.PlotGroupNames));
