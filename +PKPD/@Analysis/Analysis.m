@@ -237,7 +237,7 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
             'fminsearch' % (Optimization Toolbox is required.)
             'lsqcurvefit' % (Optimization Toolbox is required.)
             'lsqnonlin' % (Optimization Toolbox is required.)
-            'patternserch' % (Global Optimization Toolbox is required.)
+            'patternsearch' % (Global Optimization Toolbox is required.)
             'ga' % (Global Optimization Toolbox is required.)
             'particleswarm' % (Global Optimization Toolbox is required.)
             }
@@ -337,8 +337,8 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
             Message = '';
             
             % Load project
-            AllModels = sbioloadproject(ProjectPath);     
-            AllModels = cell2mat(struct2cell(AllModels)); 
+            AllModels = struct2cell(sbioloadproject(ProjectPath));
+            AllModels = [AllModels{:}]; 
             m1 = sbioselect(AllModels,'Name',ModelName,'type','sbiomodel') ; 
 
             if isempty(m1)
