@@ -19,10 +19,16 @@ classdef controller < handle
             arguments
                 app = []
             end
+
+            % UIHTML HTMLEventReceivedFcn only supported since 23b
+            if isMATLABReleaseOlderThan('R2023b')
+                error('gPKPDSim V2.0 not supported in releases older than R2023b');
+            end
+
             this.app = app;
 
             % Setup preferences.
-            this.setupPreferences();
+            this.setupPreferences();                        
 
             % Configure the window with custom settings.
             if ~isempty(this.app)
@@ -45,6 +51,13 @@ classdef controller < handle
             % These eventNames are update functions in the controller so we
             % dispatch them directly here.
             assert(eventName.startsWith("update") || eventName.startsWith("menu"));
+
+            % If we don't have a session just return after alerting. This
+            % is likely a debug session where no project is loaded.
+            % if isempty(this.session)
+            %     warning("Received an event but there is no project loaded.");
+            %     return
+            % end
 
             try
                 if this.Debug
@@ -80,11 +93,15 @@ classdef controller < handle
                     case "LoadProject"
                         trimmedSession = this.trimSession();
                         message = trimmedSession;
+                    
                     case "NewSimulation"
                         message = this.getSimulationResults();
+                    
                     case "NewPopulation"
                         message = this.getPopulationSimulationResults();
+                    
                     case "NewFitting"
+                        this.session.updateFitVariant();
                         message = this.getDataFittingResults();
 
                     case "RecentFiles"
@@ -127,8 +144,8 @@ classdef controller < handle
                 "Task", ...
                 "MaxNumRuns", ...
                 "FitErrorModel", ...
-                "MaxNumRuns",...
                 "UsePooledFitting",...
+                "NumPopulationRuns",...
                 ];
 
             for i = 1:numel(selectedFields)
@@ -137,16 +154,18 @@ classdef controller < handle
 
             sessionForUI.ProjectName = this.projectName;
 
-            % Transformations on data to simplify the communication.
-
             % Selected Variants.
             sessionForUI.Variants = this.getSelectedVariants();
 
             % Selected Doses
-            dosesFields = ["Active", "Name", "Type", "TargetName", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"];
-            s = arrayfun(@(x)struct(x), this.session.SelectedDoses);
-            fieldsToRemove = setdiff(fields(s), dosesFields);
-            sessionForUI.Doses = rmfield(s, fieldsToRemove);
+            if ~isempty(this.session.SelectedDoses)
+                dosesFields = ["Active", "Name", "Type", "TargetName", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"];
+                s = arrayfun(@(x)struct(x), this.session.SelectedDoses);
+                fieldsToRemove = setdiff(fields(s), dosesFields);
+                sessionForUI.Doses = rmfield(s, fieldsToRemove);
+            else
+                sessionForUI.Doses = [];
+            end
 
             % Simulation Time Specification
             sessionForUI.TimeSettings = [this.session.StartTime, this.session.TimeStep, this.session.StopTime];
@@ -154,7 +173,6 @@ classdef controller < handle
             % Selected parameters
             sessionForUI.Parameters = this.getParameters();
             
-
             % PlotSpeciesTable
             sessionForUI.PlotSpeciesTable = cell2table(this.session.PlotSpeciesTable, 'VariableNames', ["PlotIndex", "StateName", "DisplayName"]);
             dataUsedTF = cellfun(@(x)ischar(x), sessionForUI.PlotSpeciesTable.PlotIndex);
@@ -181,13 +199,14 @@ classdef controller < handle
             end
 
             % Used Plot Index are the plots currently selected.
-            usedPlotsIdx = unique([usedPlotsIdx, plotIndexUsedByDataset]);
+            usedPlotsIdx = unique(vertcat(usedPlotsIdx, plotIndexUsedByDataset));
+            usedPlotsIdx = usedPlotsIdx(~isnan(usedPlotsIdx));
 
             % SimulationPlotSettings
             sessionForUI.SimulationPlotSettings = struct2table(this.session.SimulationPlotSettings(usedPlotsIdx));
             sessionForUI.SimulationPlotSettings.PlotIndex = usedPlotsIdx;
 
-            % % SimProfileNotes + simulation data
+            % SimProfileNotes + simulation data
             sessionForUI.SimulationPlotOverlay = this.session.FlagSimOverlay;
             sessionForUI.SimulationProfileNotes = this.getSimulationResults();
 
@@ -209,6 +228,8 @@ classdef controller < handle
             sessionForUI.DataFittingTask.TargetSpecies = string({this.session.SelectedSpecies.partiallyQualifiedName});
             sessionForUI.DataFittingTask.PooledFitting = this.session.UsePooledFitting;
             sessionForUI.DataFittingTask.ErrorType = this.session.FitErrorModel;
+
+            sessionForUI.SimulationColormap = PKPD.controller.rgb2hex(this.session.ColorMap1);
 
             % Preferences will be sent with the Model session for simplicity sake.
             % Recent Files List
@@ -395,6 +416,7 @@ classdef controller < handle
                 end
             end
         end
+            
     end
 
     % Server-side actions
@@ -590,12 +612,15 @@ classdef controller < handle
             switch showPlot.Task
                 case 'SimulationProfileNotes'
                     field = "SimProfileNotes";
+                    this.session.(field)(showPlot.Run).Show = showPlot.Show;
                 case 'PopulationSimulationProfileNotes'
                     field = "PopProfileNotes";
+                    this.session.(field)(showPlot.Run).Show = showPlot.Show;
+                case 'DataFittingProfileNotes'
+                    % TODO: This is not yet supported
                 otherwise
                     error("Unknown task type: %s", showPlot.Task);
             end
-            this.session.(field)(showPlot.Run).Show = showPlot.Show;
         end
 
         function updatePlotColor(this, newColor)
@@ -620,7 +645,14 @@ classdef controller < handle
                     % it was for backwards compat and fix for new version
                     % later.
                     speciesNames = string(this.session.PlotSpeciesTable(:,2));
-                    idx = speciesNames == plotContent.content;
+                    if isstruct(plotContent.content)
+                        stateName = plotContent.content.StateName;
+                        %warning("Internal issue: plotContent.content should not be a struct.");
+                    else
+                        stateName = plotContent.content;
+                    end
+                    % idx = speciesNames == plotContent.content;
+                    idx = speciesNames == stateName;
                     if addTF
                         % do we have a sourceID if so its a move
                         this.session.PlotSpeciesTable{idx,1} = num2str(plotContent.plotIndex);
@@ -628,12 +660,18 @@ classdef controller < handle
                         this.session.PlotSpeciesTable{idx,1} = '';
                     end
                 case 'dataset'
-                    dataName = string(this.session.PlotDatasetTable(:,2));
-                    idx = dataName == plotContent.content;
-                    if addTF
-                        this.session.PlotDatasetTable{idx,1} = num2str(plotContent.plotIndex);
+                    if addTF && isempty(this.session.PlotDatasetTable)
+                        this.session.PlotDatasetTable{1,1} = num2str(plotContent.plotIndex);
+                        this.session.PlotDatasetTable{1,2} = plotContent.content;
+                        this.session.PlotDatasetTable{1,3} = plotContent.content;
                     else
-                        this.session.PlotDatasetTable{idx,1} = '';
+                        dataName = string(this.session.PlotDatasetTable(:,2));
+                        idx = dataName == plotContent.content;
+                        if addTF
+                            this.session.PlotDatasetTable{idx,1} = num2str(plotContent.plotIndex);
+                        else
+                            this.session.PlotDatasetTable{idx,1} = '';
+                        end
                     end
 
                 otherwise
@@ -656,6 +694,15 @@ classdef controller < handle
                 case 'SimulationProfileNotes'
                     assert(plotExport.Run <= numel(this.session.SimProfileNotes));
                     this.session.SimProfileNotes(plotExport.Run).Export = plotExport.Export;
+                case 'PopulationSimulationProfileNotes'
+                    assert(plotExport.Run <= numel(this.session.PopProfileNotes));
+                    this.session.PopProfileNotes(plotExport.Run).Export = plotExport.Export;
+                case 'DataFittingProfileNotes'
+                    % This option is not enabled yet bc previous version
+                    % did not support ProfileNotes (i.e., multiple runs)
+                    % for data fitting. Export in this case always exports
+                    % the fitted parameter values for the only fit results
+                    % available in session.
                 otherwise
                     error('unhandled case %s', plotExport.Task)
             end
@@ -712,7 +759,7 @@ classdef controller < handle
             else
                 newName = "Unnamed";
             end
-            this.session.saveVariant(char(newName));
+            this.session.saveVariant(char(newName), this.session.Task);
             this.notifyUI("updateSelectedVariants");
         end
 
@@ -815,19 +862,54 @@ classdef controller < handle
         end
         
         function updateDataFittingResponseMap(this, responseMap)
-            this.session.ResponseMap = {responseMap.ResponseMap.DataName, responseMap.ResponseMap.ModelComponentName};
-            this.notifyUI('updateDataFittingResponseMap');
+            this.session.ResponseMap{2} = responseMap.ResponseMap.ModelComponentName;
         end
 
         function updateDataFittingDoseMap(this, doseMap)
-            this.session.DoseMap = {doseMap.DoseMap.DataName, doseMap.DoseMap.DoseTarget};
-            this.notifyUI('updateDataFittingDoseMap');
+            this.session.DoseMap{2} = doseMap.DoseMap.DoseTarget;
+        end
+    
+        function updateDatasetTable(this, dataSetTable)
+            % Update all fields in the update dataSetTable struct.
+            props = fields(dataSetTable);
+            for i = 1:numel(props)
+                propName = props{i};
+                switch propName
+                    case 'Time'                        
+                        this.session.DatasetTable.(propName) = dataSetTable.(propName);
+                    case 'Group'
+                        this.session.DatasetTable.(propName) = dataSetTable.(propName);
+                        % TODO: This may be overkill (instead update only the
+                        % field were the groups are split. We could also
+                        % just move the splitting of data into the UI.                        
+                        notifyUI(this, 'updateDataset');
+                    case 'Dose'
+                        this.session.DatasetTable.Dosing = dataSetTable.(propName);
+                        if isempty(this.session.DoseMap)
+                            this.session.DoseMap = cell(1,2);
+                        end
+                        this.session.DoseMap{1} = dataSetTable.(propName);
+
+                    case 'Response'
+                        this.session.DatasetTable.Concentration = dataSetTable.(propName);
+                        if isempty(this.session.ResponseMap)
+                            this.session.ResponseMap = cell(1,2);
+                        end
+                        this.session.ResponseMap{1} = dataSetTable.(propName);
+                    otherwise
+                        error('Unknown option');
+                end
+            end
+        end    
+    
+        function updateParameterFlagFit(this, fit)
+            paramTF = string({this.session.SelectedParams.Name}).matches(fit.parameter);
+            this.session.SelectedParams(paramTF).FlagFit = fit.flagFit;            
         end
     end
 
     % Menu item callbacks.
-    % methods(Access=private)
-    methods
+    methods(Access=private)    
         function menuOpenSession(this, projectPath)                        
             if isempty(projectPath)
                 lastPath = getpref(this.PreferencesName, 'LastPath');
@@ -929,30 +1011,48 @@ classdef controller < handle
         end
 
         function menuImportDataset(this, ~)
-            Spec = {'*.xlsx;*.xls'};
+            % This function is used by the new UI to load new datasets. If
+            % a dataset was saved with a Session (aka project) then all
+            % dataset related information is saved with the project and
+            % this code is not used.
+            Spec = {'*.xlsx;*.xls;*.csv'};
             Title = 'Open Dataset';
             DataPath = getpref(this.PreferencesName, 'DataPath');
             [FileName, PathName] = uigetfile(Spec,Title,DataPath);
             FilePath = fullfile(PathName,FileName);
 
-            % Don't store paths on the session object.         
+            % Make a new PKPD.Dataset
+            this.session.DatasetTable = PKPD.Dataset;
+
+            % TODO: Don't store paths on the session object.
             this.session.DatasetTable.FilePath = FilePath;
 
-            [~,~,Raw] = xlsread(FilePath);
-            if ~isempty(Raw)
-                Headers = Raw(1,:);
-            else
-                Headers = {};
-            end
-            this.session.DatasetTable.Headers = Headers;
+            rawData = readtable(FilePath);
 
-            % Automatically update the name
-            [~,Name] = fileparts(FileName);
-            this.session.DatasetTable.Name = Name;
-            
+            if ~isempty(rawData)
+                this.session.DatasetTable.Headers = rawData.Properties.VariableNames;
+            else
+                % This should be an error.
+                error('Error loading %s', FilePath);
+            end
+
+            % Remove excluded data
+            if ismember(this.session.DatasetTable.Headers, 'Include')
+              if isstring(rawData.Include)
+                  idx = rawData.Include == "C";
+                  rawData = rawData(~idx, :);
+              end
+            end
+
+            this.session.DataToFit = rawData;
+
+            % Store the name of the dataset as the filename. 
+            [~, Name] = fileparts(FileName);
+            this.session.DatasetTable.Name = Name;            
+
             % Reuse as much as possible of old code to avoid datatype
             % issues loading sessions (aka PKPD.Analysis objects).
-            this.session.importData(this.session.DatasetTable, false); %NCA is false
+            % this.session.importData(this.session.DatasetTable, false); %NCA is false
 
             setpref(this.PreferencesName, 'DataPath', PathName);
             this.notifyUI('updateDataset');
@@ -969,6 +1069,10 @@ classdef controller < handle
                 this.saveProject(fullFileName);
             end
         end
+
+        function menuQuit(this, ~)
+            delete(this.app);
+        end
     end
 
     % These methods are used to marshall data from the Model (backend) to
@@ -980,20 +1084,39 @@ classdef controller < handle
                 simulationResults = struct2table(simProfileNotes, "AsArray", true);
                 simulationResults.Color = PKPD.controller.rgb2hex(simulationResults.Color);
                 simulationResults.Run = (1:height(simulationResults))';
-                simulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), simulationResults.ParametersTable, UniformOutput=false);
-                % TODO: there is a bug here.
-                % simulationResults.DosingTable = cell2table(simulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
-                simulationResults.DosingTable = [];
+
+                try
+                    simulationResults.ParametersTable = cell2table(simulationResults.ParametersTable, 'VariableNames', ["Name", "Value"]);
+                catch
+                    simulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), simulationResults.ParametersTable, UniformOutput=false);
+                end
+                
+                % TODO: How is this handled in MATLAB? The data source
+                % could be a cell convertible to a table or a cell of cells
+                % each convertible to a table.
+                if numel(simulationResults.DosingTable) == 1 && isempty(simulationResults.DosingTable{1})
+                    simulationResults.DosingTable = [];
+                else
+                    try
+                        simulationResults.DosingTable = cell2table(simulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"]);
+                    catch
+                        simulationResults.DosingTable = cellfun(@(x)cell2table(x, 'VariableNames',["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"]), simulationResults.DosingTable, UniformOutput=false);
+                    end
+                end
 
                 % Send only the data that is being selected now. More data will
                 % be sent on demand.
                 simData = this.session.SimData;
                 simData = struct(simData);
+                fixedDataNames = PKPD.controller.getFixedDataNames(simData);
+
+                for i = 1:numel(simData)
+                    simData(i).DataNames = fixedDataNames;
+                    simData(i).Data = simData(i).Data'; % this this orientation for proper data marshall to JS                    
+                end
+
                 fieldsToKeep = ["Data", "DataNames", "Time"];
                 simData = rmfield(simData, setdiff(fields(simData), fieldsToKeep));
-                for i = 1:numel(simData)
-                    simData(i).Data = simData(i).Data';
-                end
                 simulationResults.Data = simData';
             else
                 simulationResults = [];
@@ -1010,7 +1133,16 @@ classdef controller < handle
                 populationSimulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), populationSimulationResults.ParametersTable, UniformOutput=false);
                 % TODO: there is a bug here.
                 %populationSimulationResults.DosingTable = cell2table(populationSimulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
-                populationSimulationResults.DosingTable = [];
+                % populationSimulationResults.DosingTable = [];
+                
+                % TODO: How is this handled in MATLAB? The data source
+                % could be a cell convertible to a table or a cell of cells
+                % each convertible to a table.
+                try
+                    populationSimulationResults.DosingTable = cell2table(populationSimulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"]);
+                catch                  
+                    populationSimulationResults.DosingTable = cellfun(@(x)cell2table(x, 'VariableNames',["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"]), populationSimulationResults.DosingTable, UniformOutput=false);
+                end
 
                 % Test that this works.
                 %popSimData = repmat(struct('DataNames', [], 'Time', [], 'P5', [], 'P50', [], 'P95', []), size(this.session.PopSummaryData, 1), 1);
@@ -1032,7 +1164,7 @@ classdef controller < handle
         function dataFittingResults = getDataFittingResults(this)
             if ~isempty(this.session.FitResults)
                 dataFittingProfileNotes = arrayfun(@(x)struct(x), this.session.FitResults);
-                fieldsToKeep = ["MSE", "SSE", "LogLikelihood", "AIC", "BIC", "DFE", "FitType"];
+                fieldsToKeep = ["ParameterEstimates", "MSE", "SSE", "LogLikelihood", "AIC", "BIC", "DFE", "FitType"];
                 dataFittingProfileNotes = rmfield(dataFittingProfileNotes, setdiff(fields(dataFittingProfileNotes), fieldsToKeep));
                 dataFittingResults = struct2table(dataFittingProfileNotes, "AsArray", true);
 
@@ -1043,14 +1175,28 @@ classdef controller < handle
                 dataFittingResults.Show = true;
 
                 % Since we only support one DataFittingResults, all the
-                % simdatas in FitSimData are
+                % simdatas in FitSimData are for the same results
                 fitSimData = this.session.FitSimData;
                 fitSimData = struct(fitSimData);
+
+                fixedDataNames = PKPD.controller.getFixedDataNames(fitSimData);
+
                 fieldsToKeep = ["Data", "DataNames", "Time"];
                 fitSimData = rmfield(fitSimData, setdiff(fields(fitSimData), fieldsToKeep));
                 for i = 1:numel(fitSimData)
                     fitSimData(i).Data = fitSimData(i).Data';
-                    fitSimData(i).Color = PKPD.controller.rgb2hex(this.session.GroupColors(i,:));
+                    fitSimData(i).DataNames = fixedDataNames;
+                    % TODO: need to clean this up. There probably should
+                    % always be group colors if there is a dataset loaded
+                    % with colors.
+                    if isempty(this.session.GroupColors)
+                        cm = this.session.ColorMap1;
+                        groupColor = cm(i,:);
+                    else
+                        groupColor = this.session.GroupColors(i,:);
+                    end
+
+                    fitSimData(i).Color = PKPD.controller.rgb2hex(groupColor);
                     fitSimData(i).Group = i;
                 end
                 dataFittingResults.Data = fitSimData';
@@ -1061,7 +1207,7 @@ classdef controller < handle
         
         function parameters = getParameters(this)
             parameters = arrayfun(@(x)struct(x), this.session.SelectedParams);
-            parameters = struct2table(parameters);
+            parameters = struct2table(parameters, 'AsArray', true);
         end
 
         function variants = getSelectedVariants(this)
@@ -1087,9 +1233,13 @@ classdef controller < handle
             end
 
             % Send the time-course split by group.
+            dataSet = splitByGroup(this, dataSet);
+        end
+
+        function dataSet = splitByGroup(this, dataSet)
             groupLabel = dataSet.Meta.Group;
             if ~isempty(groupLabel)
-                groups = unique(dataSet.Data.(dataSet.Meta.Group));
+                groups = unique(dataSet.Data.(groupLabel));
                 for i = 1:numel(groups)
                     group_i_tf = dataSet.Data.(groupLabel) == i;
                     dataSet.GroupData{i} = dataSet.Data(group_i_tf,:);
@@ -1172,5 +1322,25 @@ classdef controller < handle
                 hex = reshape(hex, sz(1:end-1));
             end
         end
+    
+        function fixedNames = getFixedDataNames(simData)
+
+            globalList = [];
+            for i = 1:numel(simData)
+                for j = 1:numel(simData(i).DataInfo)
+                    fixedNames(j) = simData(i).DataInfo{j}.Compartment + "." + simData(i).DataInfo{j}.Name;
+                end
+
+                OneCpt_TF = isscalar(unique(fixedNames.extractBefore(".")));
+                if OneCpt_TF
+                    fixedNames = fixedNames.extractAfter(".");
+                end
+                
+                globalList = vertcat(globalList, fixedNames);
+            end
+
+            fixedNames = unique(globalList);
+        end
+
     end
 end

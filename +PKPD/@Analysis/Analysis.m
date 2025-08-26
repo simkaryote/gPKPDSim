@@ -202,11 +202,14 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         ProjectPath % Path to project file
         ModelName % Name of project file
         ModelObj % Model obj    
-        DataToFit % Data to fit
         SpeciesLineStyles
         SimRunColors
         PopRunColors
         GroupColors
+    end
+
+    properties (SetAccess = 'public')
+        DataToFit
     end
         
     %% Private Dependent Properties
@@ -669,7 +672,14 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         
         function saveVariant(obj,Name,varargin)
             if nargin > 2 && ischar(varargin{1})
-                ThisType = varargin{1};
+                switch(varargin{1})
+                    case 'Fitting'
+                        ThisType = 'fit';
+                    case {'Simulation', 'Population'}
+                        ThisType = 'sim';
+                    otherwise
+                        error('Unknown Task type');
+                end
             else
                 ThisType = 'sim';
             end

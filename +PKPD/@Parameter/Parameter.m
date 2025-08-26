@@ -39,7 +39,6 @@ classdef Parameter < handle & UIUtilities.ConstructorAcceptsPVPairs
     %   $Revision: 421 $  $Date: 2017-12-07 15:07:04 -0500 (Thu, 07 Dec 2017) $
     % ---------------------------------------------------------------------
     
-    %% Properties
     properties
         Name = ''
         Min = 0
@@ -51,15 +50,11 @@ classdef Parameter < handle & UIUtilities.ConstructorAcceptsPVPairs
         PercCV = 10
     end
     
-    
-    %% Private Properties
     properties (SetAccess = 'private')
         DefaultValue
-        Units = ''
+        Units = ""
     end
-    
-    
-    %% Constructor
+        
     methods
         function obj = Parameter(varargin)
             % Parameter - Constructor for PKPD.Parameter
@@ -83,10 +78,8 @@ classdef Parameter < handle & UIUtilities.ConstructorAcceptsPVPairs
             
         end %function obj = Parameter(varargin)
         
-    end %methods
-    
-    
-    %% Methods
+    end
+       
     methods
         
         function saveDefaultValue(obj)
@@ -156,10 +149,8 @@ classdef Parameter < handle & UIUtilities.ConstructorAcceptsPVPairs
             end
         end %function
         
-    end %methods
-    
-    
-    %% Set Methods
+    end
+        
     methods
         function set.Name(obj,Value)
             validateattributes(Value,{'char'},{})
@@ -194,7 +185,6 @@ classdef Parameter < handle & UIUtilities.ConstructorAcceptsPVPairs
         function set.PercCV(obj,Value)
             validateattributes(Value,{'numeric'},{'scalar','nonnan','>=',0,'<=',100})
             obj.PercCV = Value;
-        end
-        
-    end %methods
-end %classdef
+        end        
+    end
+end

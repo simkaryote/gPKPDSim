@@ -41,28 +41,25 @@ switch Type
         if ~isempty(obj.SimData) && any(ExportRuns)
             ExportRunIdx = find(ExportRuns);
             
+            % Assume a homogeneous simdata array (i.e., has the same data
+            % names across all entries).
+            Header = string(get(obj.SelectedSpecies, 'PartiallyQualifiedName'))';
+
             for runIndex = ExportRunIdx
-                SheetName = sprintf('Run %d',runIndex);
+                SheetName = sprintf('Run %d',runIndex);                
+
+                [time, data] = obj.SimData(runIndex).selectbyname(Header);
                 
-                Header = obj.SimData(runIndex).DataNames(:)';
-                
-                % Get matches from selected species
-                MatchIndex = ismember(Header,get(obj.SelectedSpecies,'Name'));
-                
-                % Prune header and ThisData based on MatchIndex
-                Header = Header(MatchIndex);
-                ThisData = obj.SimData(runIndex).Data;
-                ThisData = ThisData(:,MatchIndex);
-                
-                % Append time
-                Header = ['Time',Header]; %#ok<AGROW>
-                ThisData = [obj.SimData(runIndex).Time,ThisData]; %#ok<AGROW>
+                % make sure we got the data we expected
+                assert(size(data, 2) == numel(Header));
                
-                % Write to Excel
-                if ispc
-                    [StatusOK,Message] = xlswrite(FilePath,[Header;num2cell(ThisData)],SheetName);
-                else
-                    [StatusOK,Message] = xlwrite(FilePath,[Header;num2cell(ThisData)],SheetName);
+                % Write to File (Excel, CSV)
+                try
+                    tableForExport = array2table([time, data], 'VariableNames', ["Time", Header]);
+                    writetable(tableForExport, FilePath, 'Sheet', SheetName);
+                catch e
+                    StatusOK = false;
+                    Message = e.message;
                 end
             end
             
@@ -104,10 +101,12 @@ switch Type
         end
 
         % Write to Excel
-        if ispc
-            [StatusOK,Message] = xlswrite(FilePath,[Header;ParamsData]);
-        else
-            [StatusOK,Message] = xlwrite(FilePath,[Header;ParamsData]);
+        try
+            tableForExport = array2table(ParamsData, 'VariableNames', Header);
+            writetable(tableForExport, FilePath);
+        catch e
+            StatusOK = false;
+            Message = e.message;
         end
         
     case 'FittingSummary'
@@ -173,10 +172,13 @@ switch Type
                 ThisData = [obj.PopSummaryData(runIndex,1).Time,ThisData]; %#ok<AGROW>
                 
                 % Write to Excel
-                if ispc
-                    [StatusOK,Message] = xlswrite(FilePath,[FullHeader;FullPercHeader;num2cell(ThisData)],SheetName);
-                else
-                    [StatusOK,Message] = xlwrite(FilePath,[FullHeader;FullPercHeader;num2cell(ThisData)],SheetName);
+                try
+                    % Use a cell here because we have two header rows.
+                    cellForExport = [FullHeader; FullPercHeader; num2cell(ThisData)];
+                    writecell(cellForExport, FilePath, 'Sheet', SheetName);
+                catch e
+                    StatusOK = false;
+                    Message = e.message;
                 end
             end
             
