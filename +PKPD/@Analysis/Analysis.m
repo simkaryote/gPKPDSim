@@ -202,11 +202,14 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         ProjectPath % Path to project file
         ModelName % Name of project file
         ModelObj % Model obj    
-        DataToFit % Data to fit
         SpeciesLineStyles
         SimRunColors
         PopRunColors
         GroupColors
+    end
+
+    properties (SetAccess = 'public')
+        DataToFit
     end
         
     %% Private Dependent Properties
@@ -401,10 +404,12 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
             obj.PlotDatasetTable(:,2) = SelectedFields;
             obj.PlotDatasetTable(:,3) = SelectedFields;
             
-            % Update groupcolors            
-            updateGroupColors(obj);
+            % Update groupcolors 
+            if numel(obj.DatasetTable.Group) > 0
+                updateGroupColors(obj);
+            end
             
-            if ~isempty(obj.DataToFit)
+            if ~isempty(obj.DataToFit) && ~isempty(DatasetTable.Group)
                 UniqueGroups = unique(categorical(obj.DataToFit.(DatasetTable.Group)),'stable');
                 obj.PlotGroupNames = cellfun(@(x)char(x),num2cell(UniqueGroups(:)),'UniformOutput',false);
                 obj.SelectedGroups = true(1,numel(obj.PlotGroupNames));
@@ -667,7 +672,14 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         
         function saveVariant(obj,Name,varargin)
             if nargin > 2 && ischar(varargin{1})
-                ThisType = varargin{1};
+                switch(varargin{1})
+                    case 'Fitting'
+                        ThisType = 'fit';
+                    case {'Simulation', 'Population'}
+                        ThisType = 'sim';
+                    otherwise
+                        error('Unknown Task type');
+                end
             else
                 ThisType = 'sim';
             end
