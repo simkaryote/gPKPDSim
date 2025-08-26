@@ -57,13 +57,11 @@ end
 MWContact = {
     'MathWorks Inc.'
     '3 Apple Hill Drive'
-    'Natick, MA 01760-2098'    
-    '+1 (508) 647-7000'};
+    'Natick, MA 01760-2098'};
 GenentechContact = {
     'Genentech Inc.'
     '1 DNA Way'
-    'South San Francisco, CA 94080'
-    'hosseini.iraj@gene.com'};
+    'South San Francisco, CA 94080'};
 
 % Format Date
 if ~isempty(Date)
