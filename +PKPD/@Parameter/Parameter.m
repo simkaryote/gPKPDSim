@@ -40,7 +40,8 @@ classdef Parameter < handle & UIUtilities.ConstructorAcceptsPVPairs
     % ---------------------------------------------------------------------
     
     properties
-        Name = ''
+        Name = '' % Should be derived from Parameter object
+        Units = '' % Should be derived from Parameter object
         Min = 0
         Max = 1000
         Scale = 'linear'
@@ -52,7 +53,6 @@ classdef Parameter < handle & UIUtilities.ConstructorAcceptsPVPairs
     
     properties (SetAccess = 'private')
         DefaultValue
-        Units = ""
     end
         
     methods
