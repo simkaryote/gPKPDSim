@@ -1,6 +1,6 @@
 classdef controller < handle
     properties(Constant)
-        Version = "2"
+        Version = "2.1"
         PreferencesName = "PKPDViewer_AnalysisApp";
         Debug = false;
     end
@@ -37,6 +37,10 @@ classdef controller < handle
                 this.app.HTML.Position = [1 1 position(3) position(4)];
                 this.app.gPKPDSimUIFigure.CloseRequestFcn = @(s,e)this.closeApp;
                 this.app.gPKPDSimUIFigure.Name = "gPKPDSim " + this.Version;
+
+                % turn off some warnings for now
+                warning('off', 'SimBiology:SimData:datasetColumnNotNumeric');
+                warning('off', 'SimBiology:sbiofit:IgnoringCategoryVariableName');
             end
         end
 
