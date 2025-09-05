@@ -142,11 +142,39 @@ function [StatusOk,Message] = runFitting(obj)
         Pooled = obj.UsePooledFitting;
         FittingOptions = {'ErrorModel', ErrorModel, 'Pooled', Pooled};
 
-        % Define Algorithm options.
-        Options = statset;
-        Options.TolX = 1.0E-8;
-        Options.TolFun = 1.0E-8;
-        Options.MaxIter = 100;
+        % % Define Algorithm options.
+        % Options = statset;
+        % Options.TolX = 1.0E-8;
+        % Options.TolFun = 1.0E-8;
+        % Options.MaxIter = 100;
+
+        switch obj.FitFunctionName
+            case 'nlinfit'
+                Options = statset;
+                Options.TolX = 1.0E-8;
+                Options.TolFun = 1.0E-8;
+                Options.MaxIter = 100;
+            case 'fminsearch'
+                Options = optimset;
+                Options.MaxIter = 100;
+                Options.TolX = 1e-8;
+                Options.TolFun = 1e-8;
+            case {'lsqcurvefit', 'lsqnonlin', 'fmincon', 'fminunc', 'ga'}
+                Options = optimoptions(obj.FitFunctionName);
+                Options.MaxIterations = 100;
+                Options.FunctionTolerance = 1e-8;
+                Options.OptimalityTolerance = 1e-8;
+            case 'patternsearch'
+                Options = optimoptions(obj.FitFunctionName);
+                Options.MaxIterations = 100;
+                Options.FunctionTolerance = 1e-8;
+            case 'particleswarm'
+                Options = optimoptions(obj.FitFunctionName);
+                Options.MaxIterations = 100;
+                Options.FunctionTolerance = 1e-8;                
+            otherwise
+                error('Unknown FitFunction %s', obj.FitFunctionName);
+        end
 
         try
             if obj.useUI
