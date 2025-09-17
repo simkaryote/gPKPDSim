@@ -10,7 +10,7 @@ classdef controller < handle
         projectPath (1,1) string
         projectName (1,1) string
         session PKPD.Analysis = PKPD.Analysis.empty        
-        RevisionDate = datetime("now");
+        RevisionDate = datetime(2025, 09, 17);
         SessionDirtyState (1,1) logical = false
     end
 
