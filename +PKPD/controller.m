@@ -10,7 +10,7 @@ classdef controller < handle
         projectPath (1,1) string
         projectName (1,1) string
         session PKPD.Analysis = PKPD.Analysis.empty        
-        RevisionDate = datetime("now");
+        RevisionDate = datetime(2025, 09, 17);
         SessionDirtyState (1,1) logical = false
     end
 
@@ -26,6 +26,24 @@ classdef controller < handle
             end
 
             this.app = app;
+
+            % The models used for the built-in case studies use custom
+            % units and we need to make sure those are loaded.
+            units;
+
+            % See if there is an old version of gPKPDSim installed in the
+            % Apps folder. 
+            % appInfo = matlab.apputil.getInstalledAppInfo;
+            % idx = appInfo.id == "gPKPDSimAPP";
+            % if any(idx)
+            %    matlab.apputil.uninstall(appInfo(idx).id);
+            % end
+            % 
+            % installedAddOns = matlab.addons.installedAddons;
+            % gPKPDSimAddOn = installedAddOns(installedAddOns.Name == "gPKPDSim", :);
+            % if ~isempty(gPKPDSimAddOn)
+            %     matlab.addons.uninstall("gPKPDSim");
+            % end
 
             % Setup preferences.
             this.setupPreferences();                        
@@ -56,13 +74,6 @@ classdef controller < handle
             % dispatch them directly here.
             assert(eventName.startsWith("update") || eventName.startsWith("menu"));
 
-            % If we don't have a session just return after alerting. This
-            % is likely a debug session where no project is loaded.
-            % if isempty(this.session)
-            %     warning("Received an event but there is no project loaded.");
-            %     return
-            % end
-
             try
                 if this.Debug
                     fprintf("Handling event: %s\n", eventName);
@@ -86,10 +97,11 @@ classdef controller < handle
         % want another string making the connections) but I do want to keep
         % communication going through one function so I plan to look at
         % this decision again and see if we can clean it up.
-        function notifyUI(this, eventName)
+        function notifyUI(this, eventName, inputMessage)
             arguments
                 this
                 eventName (1,1) string
+                inputMessage = ""
             end
 
             if ~isempty(this.app)
@@ -126,6 +138,9 @@ classdef controller < handle
                     case "updateDataFittingDoseMap"
                         message = this.getDataFittingDoseMap();
 
+                    case "Error"
+                        message = inputMessage;
+                        
                     otherwise
                         fprintf("Unhandled event: %s\n", eventName);
                 end
@@ -183,6 +198,14 @@ classdef controller < handle
             sessionForUI.PlotSpeciesTable.PlotIndex(~dataUsedTF) = {'NaN'};
             sessionForUI.PlotSpeciesTable.PlotIndex = cellfun(@(x)str2double(x), sessionForUI.PlotSpeciesTable.PlotIndex);
             sessionForUI.PlotSpeciesTable.StateName = string(sessionForUI.PlotSpeciesTable.StateName);
+            % normalize names to have [] if needed. 
+            for jj = 1:numel(sessionForUI.PlotSpeciesTable.StateName)
+                if ~isvarname(sessionForUI.PlotSpeciesTable.StateName(jj)) && ~sessionForUI.PlotSpeciesTable.StateName(jj).startsWith("[")
+                    sessionForUI.PlotSpeciesTable.StateName(jj) = "[" + sessionForUI.PlotSpeciesTable.StateName(jj) + "]";
+                end
+            end
+
+
             sessionForUI.PlotSpeciesTable.DisplayName = [];
             sessionForUI.PlotSpeciesTable.LineStyle = string(this.session.SpeciesLineStyles);
             % will need the plot settings for the plots used.
@@ -224,6 +247,9 @@ classdef controller < handle
             % Dataset information
             sessionForUI.DataSet = this.getDataset();
 
+            % Fitting method options
+            sessionForUI.FitFunctionOptions = this.getFitFunctionOptions();
+
             % DataFitting Task
             sessionForUI.DataFittingTask.ResponseMap = this.getDataFittingResponseMap();
             sessionForUI.DataFittingTask.DoseMap = this.getDataFittingDoseMap();
@@ -232,6 +258,7 @@ classdef controller < handle
             sessionForUI.DataFittingTask.TargetSpecies = string({this.session.SelectedSpecies.partiallyQualifiedName});
             sessionForUI.DataFittingTask.PooledFitting = this.session.UsePooledFitting;
             sessionForUI.DataFittingTask.ErrorType = this.session.FitErrorModel;
+            sessionForUI.DataFittingTask.FitFunctionName = this.session.FitFunctionName;
 
             sessionForUI.SimulationColormap = PKPD.controller.rgb2hex(this.session.ColorMap1);
 
@@ -429,7 +456,11 @@ classdef controller < handle
         % selected in the frontend.
         function runTask(this, ~)
 
-            [status, message] = this.session.run;
+            try
+                [status, message] = this.session.run;
+            catch e
+                disp(e)
+            end
 
             if status
                 switch this.session.Task
@@ -443,6 +474,7 @@ classdef controller < handle
                         error('Unknown functionalty %s', this.session.Task);
                 end
             else
+                notifyUI(this, 'Error', message);
                 error("Failed to run %s with message: %s", this.session.Task, message);
             end
         end
@@ -655,8 +687,19 @@ classdef controller < handle
                     else
                         stateName = plotContent.content;
                     end
-                    % idx = speciesNames == plotContent.content;
+
                     idx = speciesNames == stateName;
+                    if ~any(idx)
+                        % Deal with brakets
+                        stateName = string(stateName);
+                        if stateName.startsWith("[") && stateName.endsWith("]")
+                            stateName = stateName.extractBetween("[", "]");
+                        end
+                        idx = speciesNames == stateName;
+                    end
+                    
+                    assert(sum(idx) == 1, "Looking for a state that is not present.");
+                    
                     if addTF
                         % do we have a sourceID if so its a move
                         this.session.PlotSpeciesTable{idx,1} = num2str(plotContent.plotIndex);
@@ -910,6 +953,10 @@ classdef controller < handle
             paramTF = string({this.session.SelectedParams.Name}).matches(fit.parameter);
             this.session.SelectedParams(paramTF).FlagFit = fit.flagFit;            
         end
+
+        function updateFitFunctionName(this, fitFunctionName)
+            this.session.FitFunctionName = fitFunctionName.fitFunctionName;
+        end
     end
 
     % Menu item callbacks.
@@ -963,6 +1010,14 @@ classdef controller < handle
             if ~StatusOK
                 error('Unhandled error. Need to send this to the frontend. %s', Message);
             end
+        end
+
+        function menuExportSimToMATLABFigure(this, ~)
+            this.session.plotSimulationResults();
+        end
+
+        function menuExportPopulationSimToMATLABFigure(this, ~)
+            this.session.plotPopulationSimulationResults();
         end
 
         function menuExportDataFittingToPDF(this, ~)
@@ -1075,13 +1130,22 @@ classdef controller < handle
         end
 
         function menuQuit(this, ~)
-            delete(this.app);
+            s = "OK";
+            if this.projectName.startsWith('casestudy') && this.projectName.endsWith('_final')
+                delete(this.app)
+            elseif this.SessionDirtyState                
+                s = uiconfirm(this.app.gPKPDSimUIFigure, 'There are unsaved changes. Close gPKPDSim?', "quit");
+            end
+
+            if strcmp(s, "OK")
+                delete(this.app);
+            end
         end
     end
 
     % These methods are used to marshall data from the Model (backend) to
     % the UI (frontend).
-    methods(Access=private)
+    methods (Access=private)
         function simulationResults = getSimulationResults(this)
             if ~isempty(this.session.SimProfileNotes)
                 simProfileNotes = arrayfun(@(x)struct(x), this.session.SimProfileNotes);
@@ -1095,24 +1159,27 @@ classdef controller < handle
                     simulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), simulationResults.ParametersTable, UniformOutput=false);
                 end
                 
-                % TODO: How is this handled in MATLAB? The data source
-                % could be a cell convertible to a table or a cell of cells
-                % each convertible to a table.
-                if numel(simulationResults.DosingTable) == 1 && isempty(simulationResults.DosingTable{1})
-                    simulationResults.DosingTable = [];
-                else
-                    try
-                        simulationResults.DosingTable = cell2table(simulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"]);
-                    catch
-                        simulationResults.DosingTable = cellfun(@(x)cell2table(x, 'VariableNames',["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"]), simulationResults.DosingTable, UniformOutput=false);
+                dosingTable_VariableNames = ["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"];
+
+                if size(simulationResults.DosingTable,2) ~= 1
+                    for j = 1:height(simulationResults)
+                        tmp(j) = {simulationResults.DosingTable(j,:)};
                     end
+                    simulationResults.DosingTable = tmp';
                 end
 
-                % Send only the data that is being selected now. More data will
-                % be sent on demand.
+                for j = 1:height(simulationResults)
+                    dosingTable_j = simulationResults.DosingTable{j};
+                    if ~isempty(dosingTable_j)
+                        simulationResults.DosingTable{j} = cell2table(dosingTable_j, VariableNames=dosingTable_VariableNames);
+                    else
+                        simulationResults.DosingTable{j} = {};
+                    end
+                end                    
+
                 simData = this.session.SimData;
-                simData = struct(simData);
                 fixedDataNames = PKPD.controller.getFixedDataNames(simData);
+                simData = struct(simData);
 
                 for i = 1:numel(simData)
                     simData(i).DataNames = fixedDataNames;
@@ -1135,25 +1202,27 @@ classdef controller < handle
 
                 populationSimulationResults.Run = (1:height(populationSimulationResults))';
                 populationSimulationResults.ParametersTable = cellfun(@(x)cell2table(x, 'VariableNames', ["Name", "Value"]), populationSimulationResults.ParametersTable, UniformOutput=false);
-                % TODO: there is a bug here.
-                %populationSimulationResults.DosingTable = cell2table(populationSimulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "Interval", "TimeUnits", "Amount", "AmountUnits", "foo1", "foo2", "foo3"]);
-                % populationSimulationResults.DosingTable = [];
                 
-                % TODO: How is this handled in MATLAB? The data source
-                % could be a cell convertible to a table or a cell of cells
-                % each convertible to a table.
-                try
-                    populationSimulationResults.DosingTable = cell2table(populationSimulationResults.DosingTable, 'VariableNames',["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"]);
-                catch                  
-                    populationSimulationResults.DosingTable = cellfun(@(x)cell2table(x, 'VariableNames',["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"]), populationSimulationResults.DosingTable, UniformOutput=false);
+                dosingTable_VariableNames = ["DoseName", "Type", "Target", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"];
+                if size(populationSimulationResults.DosingTable,2) ~= 1
+                    for j = 1:height(populationSimulationResults)
+                        tmp(j) = {populationSimulationResults.DosingTable(j,:)};
+                    end
+                    populationSimulationResults.DosingTable = tmp';
                 end
 
-                % Test that this works.
-                %popSimData = repmat(struct('DataNames', [], 'Time', [], 'P5', [], 'P50', [], 'P95', []), size(this.session.PopSummaryData, 1), 1);
-                
+                for j = 1:height(populationSimulationResults)
+                    dosingTable_j = populationSimulationResults.DosingTable{j};
+                    if ~isempty(dosingTable_j)
+                        populationSimulationResults.DosingTable{j} = cell2table(dosingTable_j, VariableNames=dosingTable_VariableNames);
+                    else
+                        populationSimulationResults.DosingTable{j} = {};
+                    end
+                end
+
                 for i = 1:size(this.session.PopSummaryData, 1)
                     thisRun = this.session.PopSummaryData(i,:);
-                    popSimData(i).DataNames = string({thisRun.Name});
+                    popSimData(i).DataNames = this.getFixedNamesFromStrings(string({thisRun.Name}));
                     popSimData(i).Time = thisRun(1).Time; % Should check all time vectors are the same.
                     popSimData(i).P5 = [thisRun.P5]';
                     popSimData(i).P50 = [thisRun.P50]';
@@ -1165,6 +1234,10 @@ classdef controller < handle
             end
         end
         
+        function fitFunctionOptions = getFitFunctionOptions(this)
+            fitFunctionOptions = table(string(this.session.FitFunctionOptions), 'VariableNames', "FitFunctions");
+        end
+
         function dataFittingResults = getDataFittingResults(this)
             if ~isempty(this.session.FitResults)
                 dataFittingProfileNotes = arrayfun(@(x)struct(x), this.session.FitResults);
@@ -1181,9 +1254,8 @@ classdef controller < handle
                 % Since we only support one DataFittingResults, all the
                 % simdatas in FitSimData are for the same results
                 fitSimData = this.session.FitSimData;
-                fitSimData = struct(fitSimData);
-
                 fixedDataNames = PKPD.controller.getFixedDataNames(fitSimData);
+                fitSimData = struct(fitSimData);
 
                 fieldsToKeep = ["Data", "DataNames", "Time"];
                 fitSimData = rmfield(fitSimData, setdiff(fields(fitSimData), fieldsToKeep));
@@ -1329,22 +1401,38 @@ classdef controller < handle
     
         function fixedNames = getFixedDataNames(simData)
 
-            globalList = [];
-            for i = 1:numel(simData)
-                for j = 1:numel(simData(i).DataInfo)
-                    fixedNames(j) = simData(i).DataInfo{j}.Compartment + "." + simData(i).DataInfo{j}.Name;
+            assert(simData.IsHomogeneous, "Internal error. Heterogeneous simdata array found.");
+            firstSimData = simData(1);
+
+            for j = 1:numel(firstSimData.DataInfo)
+                currentCompartmentName = firstSimData.DataInfo{j}.Compartment;
+                currentStateName = firstSimData.DataInfo{j}.Name;
+
+                if ~isvarname(currentCompartmentName)
+                    currentCompartmentName = "[" + currentCompartmentName + "]";
                 end
 
-                OneCpt_TF = isscalar(unique(fixedNames.extractBefore(".")));
-                if OneCpt_TF
-                    fixedNames = fixedNames.extractAfter(".");
+                if ~isvarname(currentStateName)
+                    currentStateName = "[" + currentStateName + "]";
                 end
-                
-                globalList = vertcat(globalList, fixedNames);
+
+                fixedNames(j) = currentCompartmentName + "." + currentStateName;
             end
 
-            fixedNames = unique(globalList);
+            OneCpt_TF = isscalar(unique(fixedNames.extractBefore(".")));
+            if OneCpt_TF
+                fixedNames = fixedNames.extractAfter(".");
+            end
         end
 
+        function fixedNames = getFixedNamesFromStrings(names)
+            for j = 1:numel(names)
+                if ~isvarname(names(j)) && ~names(j).startsWith("[")
+                    fixedNames(j) = "[" + names(j) + "]";
+                else
+                    fixedNames(j) = names(j);
+                end
+            end
+        end
     end
 end
