@@ -206,6 +206,9 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         SimRunColors
         PopRunColors
         GroupColors
+
+        % Model documentation in HTML (loaded from a file)
+        ModelReport = ''
     end
 
     properties (SetAccess = 'public')
@@ -353,7 +356,21 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
                 obj.ModelName = ModelName;                      
             end
         end %function
-        
+
+        function importModelReport(obj, reportPath)
+            arguments
+                obj (1,1)
+                reportPath (1,1) string 
+            end
+
+            fid = fopen(reportPath, "r");
+            if fid == -1
+                error('Failed to open the model report file: %s', reportPath);
+            end
+            cleanupObj = onCleanup(@()fclose(fid));
+            textData = textscan(fid, "%s", 'Delimiter', '\n');
+            obj.ModelReport = strjoin(textData{1}, newline);
+        end        
         
         function importData(obj,DatasetTable,FlagComputeNCA)
             % Assign
