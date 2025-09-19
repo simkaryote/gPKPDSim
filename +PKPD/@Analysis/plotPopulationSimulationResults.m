@@ -10,7 +10,7 @@ function plotPopulationSimulationResults(this)
     rows = layout(1);
     cols = layout(2);
 
-    tiledlayoutObj = tiledlayout(fig, rows, cols);
+    tiledlayout(fig, rows, cols);
 
     % Process the PlotSpeciesTable to see what needs plotting
     plotContents = this.PlotSpeciesTable(:,1:2);
@@ -19,22 +19,18 @@ function plotPopulationSimulationResults(this)
     plotContents = plotContents(notEmpty_TF, :);
     plotNumbers = cellfun(@(x)str2double(x), plotContents(:,1));
 
-    % simRunToExportTF = [this.SimProfileNotes.Export];
     simRunToExportTF = [this.PopProfileNotes.Export];
 
-    % simDataToPlot = this.SimData(simRunToExportTF);
     simDataToPlot = this.PopSummaryData(simRunToExportTF,:);
 
-    %simProfileNotesToPlot = this.SimProfileNotes(simRunToExportTF);
     simProfileNotesToPlot = this.PopProfileNotes(simRunToExportTF);
 
     for i = 1:rows*cols        
-        nexttile
+        ax = nexttile;
         statesToPlotIdx = find(i == plotNumbers);
         for j = 1:numel(statesToPlotIdx)
             name = plotContents{statesToPlotIdx(j),2};
             for k = 1:size(simDataToPlot,1)
-                %sd = simDataToPlot(k).selectbyname(name);
                 whichOne = name == string({this.PopSummaryData(k,:).Name});
                 theOne = simDataToPlot(k, whichOne);
 
@@ -54,8 +50,8 @@ function plotPopulationSimulationResults(this)
                 hold on
 
                 plot(Time, Prctile50, 'Color', simProfileNotesToPlot(k).Color);
-
-                hold on
+                yScale = this.PopulationPlotSettings(statesToPlotIdx(j)).YScale;
+                set(ax, 'YScale', yScale);
             end
         end
         if isscalar(statesToPlotIdx)

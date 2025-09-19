@@ -10,7 +10,7 @@ function plotSimulationResults(this)
     rows = layout(1);
     cols = layout(2);
 
-    tiledlayoutObj = tiledlayout(fig, rows, cols);
+    tiledlayout(fig, rows, cols);
 
     % Process the PlotSpeciesTable to see what needs plotting
     plotContents = this.PlotSpeciesTable(:,1:2);
@@ -24,13 +24,15 @@ function plotSimulationResults(this)
     simProfileNotesToPlot = this.SimProfileNotes(simRunToExportTF);
 
     for i = 1:rows*cols        
-        nexttile
+        ax = nexttile;
         statesToPlotIdx = find(i == plotNumbers);
         for j = 1:numel(statesToPlotIdx)
             name = plotContents{statesToPlotIdx(j),2};
             for k = 1:numel(simDataToPlot)
                 sd = simDataToPlot(k).selectbyname(name);
+                yScale = this.SimulationPlotSettings(statesToPlotIdx(j)).YScale;
                 plot(sd.Time, sd.Data, 'Color', simProfileNotesToPlot(k).Color);
+                set(ax, 'YScale', yScale);
                 hold on
             end
         end
