@@ -208,7 +208,7 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         GroupColors
 
         % Model documentation in HTML (loaded from a file)
-        ModelReport = ''
+        ModelDocumentation = ''
     end
 
     properties (SetAccess = 'public')
@@ -357,7 +357,7 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
             end
         end %function
 
-        function importModelReport(obj, reportPath)
+        function importModelDocumentation(obj, reportPath)
             arguments
                 obj (1,1)
                 reportPath (1,1) string 
@@ -368,8 +368,7 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
                 error('Failed to open the model report file: %s', reportPath);
             end
             cleanupObj = onCleanup(@()fclose(fid));
-            textData = textscan(fid, "%s", 'Delimiter', '\n');
-            obj.ModelReport = strjoin(textData{1}, newline);
+            obj.ModelDocumentation = fscanf(fid, "%c", Inf);
         end        
         
         function importData(obj,DatasetTable,FlagComputeNCA)
