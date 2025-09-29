@@ -1070,11 +1070,17 @@ classdef controller < handle
         end
 
         function menuModelDocumentation(this, ~)
-            if ~isempty(this.session) && ~isempty(this.session.ModelDocumentation)
+            if ~isempty(this.session)
+                if ~(this.session.ModelDocumentation == "")
+                    source = this.session.ModelDocumentation;
+                else
+                    source = "<!DOCTYPE html><html><head><title>Model Documentation</title></head><body><p>No Model Documentation Available.</p></body></html>";
+                end
+
                 f = uifigure;
                 pos = f.Position;
                 margin = 10;
-                uihtml(f, HTMLSource=this.session.ModelDocumentation, Position=[margin, margin, pos(3)-margin, pos(4)-margin]);
+                uihtml(f, HTMLSource=source, Position=[margin, margin, pos(3)-margin, pos(4)-margin]);
             end
         end
 
