@@ -206,13 +206,12 @@ classdef Analysis < handle & UIUtilities.ConstructorAcceptsPVPairs
         SimRunColors
         PopRunColors
         GroupColors
-
-        % Model documentation in HTML (loaded from a file)
-        ModelDocumentation = ''
     end
 
     properties (SetAccess = 'public')
         DataToFit
+        % Model documentation in HTML (loaded from a file)
+        ModelDocumentation = ""
     end
         
     %% Private Dependent Properties
