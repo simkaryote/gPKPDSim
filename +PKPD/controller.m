@@ -1069,6 +1069,15 @@ classdef controller < handle
             web('gPKPDSimUserGuide.html');
         end
 
+        function menuModelDocumentation(this, ~)
+            if ~isempty(this.session) && ~isempty(this.session.ModelDocumentation)
+                f = uifigure;
+                pos = f.Position;
+                margin = 10;
+                uihtml(f, HTMLSource=this.session.ModelDocumentation, Position=[margin, margin, pos(3)-margin, pos(4)-margin]);
+            end
+        end
+
         function menuImportDataset(this, ~)
             % This function is used by the new UI to load new datasets. If
             % a dataset was saved with a Session (aka project) then all
