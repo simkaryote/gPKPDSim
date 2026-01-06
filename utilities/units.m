@@ -1,54 +1,18 @@
-newUnitName =  'fold' ;
-newUnitComposition = 'dimensionless' ;
- 
-% if new unit name does not exist
-if isempty(sbioselect(sbioroot, 'Name', newUnitName))
-   
-% Create units for the rate constants of a first-order and a second-order reaction.
-    unitObj1 = sbiounit(newUnitName, newUnitComposition);
-   
-% add unit to library
-    sbioaddtolibrary(unitObj1);
-  
-end
 
-newUnitName =  'normalized' ;
-newUnitComposition = 'dimensionless' ;
- 
-% if new unit name does not exist
-if isempty(sbioselect(sbioroot, 'Name', newUnitName))
-   
-% Create units for the rate constants of a first-order and a second-order reaction.
-    unitObj1 = sbiounit(newUnitName, newUnitComposition);
-   
-% add unit to library
-    sbioaddtolibrary(unitObj1);
-  
-end
+newUnitTable = [
+    "fold", "dimensionless";
+    "normalized", "dimensionless";
+    "fraction", "dimensionless";
+    "nM", "nanomole / litre";
+    "cell", "dimensionless"];
 
-newUnitName =  'fraction' ;
-newUnitComposition = 'dimensionless' ;
- 
-% if new unit name does not exist
-if isempty(sbioselect(sbioroot, 'Name', newUnitName))
-   
-% Create units for the rate constants of a first-order and a second-order reaction.
-    unitObj1 = sbiounit(newUnitName, newUnitComposition);
-   
-% add unit to library
-    sbioaddtolibrary(unitObj1);
-  
-end
-
-newUnitName =  'nM' ;
-newUnitComposition = 'nanomole / litre';
- 
-% if new unit name does not exist
-if isempty(sbioselect(sbioroot, 'Name', newUnitName))
-   
-% Create units for the rate constants of a first-order and a second-order reaction.
-    unitObj1 = sbiounit(newUnitName, newUnitComposition);
-   
-% add unit to library
-    sbioaddtolibrary(unitObj1);
+for i = 1:size(newUnitTable, 1)
+    newUnitName = newUnitTable(i, 1);
+    newUnitComposition = newUnitTable(i, 2);
+    
+    % if new unit name does not exist
+    if isempty(sbioselect(sbioroot, 'Name', newUnitName))
+        unitObj = sbiounit(newUnitName, newUnitComposition);
+        sbioaddtolibrary(unitObj);
+    end
 end

@@ -10,7 +10,7 @@ classdef controller < handle
         projectPath (1,1) string
         projectName (1,1) string
         session PKPD.Analysis = PKPD.Analysis.empty        
-        RevisionDate = datetime(2025, 09, 17);
+        RevisionDate datetime = datetime.empty() %datetime(2025, 09, 17);
         SessionDirtyState (1,1) logical = false
     end
 
@@ -25,6 +25,16 @@ classdef controller < handle
                 error('gPKPDSim V2.0 not supported in releases older than R2023b');
             end
 
+            % Read the release time stamp file to get the release date.
+            releaseTimeStampFilePath = fileparts(mfilename("fullpath")) + "/releaseTimeStamp.mat";
+            if isfile(releaseTimeStampFilePath)
+                date = load(releaseTimeStampFilePath);
+                this.RevisionDate = date.d;
+            else
+                this.RevisionDate = datetime('now');
+            end
+
+            % Store the View
             this.app = app;
 
             % The models used for the built-in case studies use custom
@@ -178,8 +188,15 @@ classdef controller < handle
 
             % Selected Doses
             if ~isempty(this.session.SelectedDoses)
+                % Schedule doses not supported
+                repeatDoses_TF = string({this.session.SelectedDoses.Type}) == "repeatdose";
+
+                if ~all(repeatDoses_TF)
+                    warning("Only repeat doses are supported. Removing schedule doses");
+                end
+
                 dosesFields = ["Active", "Name", "Type", "TargetName", "StartTime", "TimeUnits", "Amount", "AmountUnits", "Interval", "Rate", "RepeatCount"];
-                s = arrayfun(@(x)struct(x), this.session.SelectedDoses);
+                s = arrayfun(@(x)struct(x), this.session.SelectedDoses(repeatDoses_TF));
                 fieldsToRemove = setdiff(fields(s), dosesFields);
                 sessionForUI.Doses = rmfield(s, fieldsToRemove);
             else
@@ -198,12 +215,13 @@ classdef controller < handle
             sessionForUI.PlotSpeciesTable.PlotIndex(~dataUsedTF) = {'NaN'};
             sessionForUI.PlotSpeciesTable.PlotIndex = cellfun(@(x)str2double(x), sessionForUI.PlotSpeciesTable.PlotIndex);
             sessionForUI.PlotSpeciesTable.StateName = string(sessionForUI.PlotSpeciesTable.StateName);
-            % normalize names to have [] if needed. 
-            for jj = 1:numel(sessionForUI.PlotSpeciesTable.StateName)
-                if ~isvarname(sessionForUI.PlotSpeciesTable.StateName(jj)) && ~sessionForUI.PlotSpeciesTable.StateName(jj).startsWith("[")
-                    sessionForUI.PlotSpeciesTable.StateName(jj) = "[" + sessionForUI.PlotSpeciesTable.StateName(jj) + "]";
-                end
-            end
+            % normalize names to have [] if needed.
+            sessionForUI.PlotSpeciesTable.StateName = PKPD.controller.getFixedNamesFromStrings(sessionForUI.PlotSpeciesTable.StateName)';
+            % for jj = 1:numel(sessionForUI.PlotSpeciesTable.StateName)
+            %     if ~isvarname(sessionForUI.PlotSpeciesTable.StateName(jj)) && ~sessionForUI.PlotSpeciesTable.StateName(jj).startsWith("[")
+            %         sessionForUI.PlotSpeciesTable.StateName(jj) = "[" + sessionForUI.PlotSpeciesTable.StateName(jj) + "]";
+            %     end
+            % end
 
 
             sessionForUI.PlotSpeciesTable.DisplayName = [];
@@ -230,6 +248,17 @@ classdef controller < handle
             usedPlotsIdx = usedPlotsIdx(~isnan(usedPlotsIdx));
 
             % SimulationPlotSettings
+            % Due to a bug and wanting to enable buggy session files to
+            % work we will do some defensive programming here.
+            % SimulationPlotSettings is not used for anything other than
+            % YScale and the default for that property is 'linear' so just
+            % accomodate the buggy session file by providing as many
+            % SimulationPlotSettings as needed.
+            maxIndex = max(usedPlotsIdx);
+            if maxIndex > numel(this.session.SimulationPlotSettings)
+                this.session.SimulationPlotSettings(maxIndex).YScale = 'linear';
+            end
+
             sessionForUI.SimulationPlotSettings = struct2table(this.session.SimulationPlotSettings(usedPlotsIdx));
             sessionForUI.SimulationPlotSettings.PlotIndex = usedPlotsIdx;
 
@@ -447,7 +476,14 @@ classdef controller < handle
                 end
             end
         end
-            
+          
+        function convertOrDeselectScheduleDoses(this)
+            scheduleDoseTF = string({this.session.SelectedDoses.Type}) == "scheduledose";
+
+            if any(scheduleDoseTF)                
+                this.session.SelectedDoses = this.session.SelectedDoses(~scheduleDoseTF);
+            end
+        end
     end
 
     % Server-side actions
@@ -513,6 +549,10 @@ classdef controller < handle
 
             warning('off', 'MATLAB:structOnObject');
             warning('off', 'SimBiology:REACTIONRATE_INVALID');
+
+            % If there are ScheduleDoses selected then deselect them. If
+            % possible convert the schedule dose to a repeat dose.
+            this.convertOrDeselectScheduleDoses();
 
             this.notifyUI("LoadProject");
 
@@ -642,6 +682,17 @@ classdef controller < handle
 
         function updatePlotLayout(this, plotLayout)
             this.session.SelectedPlotLayout = plotLayout.layout;
+
+            % This needs to make sure we have enough SimulationPlotSettings
+            % around. Number could increase or decrease.
+            rows_columns = str2double(split(string(plotLayout.layout), "x"));
+            numPlotSettings = numel(this.session.SimulationPlotSettings);
+
+            if prod(rows_columns) > numPlotSettings
+                this.session.SimulationPlotSettings(numPlotSettings).YScale = 'linear';
+            elseif prod(rows_columns) < numPlotSettings
+                this.session.SimulationPlotSettings = this.session.SimulationPlotSettings(1:prod(rows_columns));
+            end
         end
 
         function updatePlotShow(this, showPlot)
@@ -683,7 +734,6 @@ classdef controller < handle
                     speciesNames = string(this.session.PlotSpeciesTable(:,2));
                     if isstruct(plotContent.content)
                         stateName = plotContent.content.StateName;
-                        %warning("Internal issue: plotContent.content should not be a struct.");
                     else
                         stateName = plotContent.content;
                     end
@@ -731,7 +781,8 @@ classdef controller < handle
 
         function updatePlotStyles(this, plotStyle)
             speciesNames = string(this.session.PlotSpeciesTable(:,2));
-            idx = speciesNames == plotStyle.speciesName;
+            % idx = speciesNames == plotStyle.speciesName;
+            idx = speciesNames == string(plotStyle.speciesName).extractBetween("[", "]");
             assert(sum(idx) == 1);
             this.session.setSpeciesLineStyles(find(idx), plotStyle.lineStyle);
         end
@@ -1013,11 +1064,15 @@ classdef controller < handle
         end
 
         function menuExportSimToMATLABFigure(this, ~)
-            this.session.plotSimulationResults();
+            this.session.plotSimulationResults('simulation');
         end
 
         function menuExportPopulationSimToMATLABFigure(this, ~)
-            this.session.plotPopulationSimulationResults();
+            this.session.plotSimulationResults('population');
+        end
+
+        function menuExportDataFittingToMATLABFigure(this, ~)
+            this.session.plotSimulationResults('datafitting');
         end
 
         function menuExportDataFittingToPDF(this, ~)
@@ -1198,7 +1253,7 @@ classdef controller < handle
 
                 for i = 1:numel(simData)
                     simData(i).DataNames = fixedDataNames;
-                    simData(i).Data = simData(i).Data'; % this this orientation for proper data marshall to JS                    
+                    simData(i).Data = simData(i).Data'; % this orientation for proper data marshall to JS
                 end
 
                 fieldsToKeep = ["Data", "DataNames", "Time"];
@@ -1260,11 +1315,39 @@ classdef controller < handle
                 dataFittingProfileNotes = rmfield(dataFittingProfileNotes, setdiff(fields(dataFittingProfileNotes), fieldsToKeep));
                 dataFittingResults = struct2table(dataFittingProfileNotes, "AsArray", true);
 
-                % We only support having one datafitting results.
-                assert(height(dataFittingResults) == 1);
+                % For Pooled fits there will be one FitResults object and
+                % the number of FitSimData will equal the number of groups
+                % in the data. 
+                % For Unpooled fits there will be as many FitResults as
+                % there are groups in the data and as many FitSimData.
+                
+                % Determine the number of groups in the data
+                if ~isempty(this.session.DatasetTable.Group)
+                    nGroups = numel(unique(this.session.DataToFit.(this.session.DatasetTable.Group)));
+                else
+                    nGroups = 1;
+                end
 
-                dataFittingResults.Run = (1:height(dataFittingResults))';
-                dataFittingResults.Show = true;
+                % % We only support having one datafitting results.
+                % % The length of datafitting results is 1 for pooled fits
+                % % and its numberOfGroups for unpooled fits. 
+                % nGroups = 1;
+                % if ~this.session.UsePooledFitting
+                %     nGroups = numel(unique(this.session.DataToFit.(this.session.DatasetTable.Group)));
+                % end
+
+                if this.session.UsePooledFitting
+                    assert(height(dataFittingResults) == 1);
+                    assert(numel(this.session.FitSimData) == nGroups);
+                else
+                    assert(height(dataFittingResults) == nGroups);
+                    assert(numel(this.session.FitSimData) == nGroups);
+                end
+
+                % dataFittingResults.Run = (1:height(dataFittingResults))';
+                % Multiple runs not supported yet, set Run to 1
+                dataFittingResults.Run = ones(height(dataFittingResults),1);
+                dataFittingResults.Show = true(height(dataFittingResults),1);
 
                 % Since we only support one DataFittingResults, all the
                 % simdatas in FitSimData are for the same results
@@ -1290,7 +1373,14 @@ classdef controller < handle
                     fitSimData(i).Color = PKPD.controller.rgb2hex(groupColor);
                     fitSimData(i).Group = i;
                 end
-                dataFittingResults.Data = fitSimData';
+                if this.session.UsePooledFitting
+                    % All fitSimData go with the one dataFittingResults
+                    dataFittingResults.Data = fitSimData';
+                else
+                    % when unpooled there is one fitSimData per group/row
+                    % in dataFittingResults
+                    dataFittingResults.Data = fitSimData;
+                end
             else
                 dataFittingResults = [];
             end
@@ -1438,6 +1528,10 @@ classdef controller < handle
             if OneCpt_TF
                 fixedNames = fixedNames.extractAfter(".");
             end
+
+            % % % % Normalize to have [] if the whole thing is not a
+            % varname this should do the same as getFixedNamesFromStrings
+            fixedNames = PKPD.controller.getFixedNamesFromStrings(fixedNames);
         end
 
         function fixedNames = getFixedNamesFromStrings(names)
