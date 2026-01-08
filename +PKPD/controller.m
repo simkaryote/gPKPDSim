@@ -1,6 +1,6 @@
 classdef controller < handle
     properties(Constant)
-        Version = "2.1"
+        Version = "2.1.2"
         PreferencesName = "PKPDViewer_AnalysisApp";
         Debug = false;
     end
